@@ -15,7 +15,9 @@ Macros to automate dividing and combining conference rooms with Webex devices so
 
 ## Installation/Configuration  
 
-Follow the [Version 2.2 Two-way System Drawing](./Version_2_2_Two-way_System_Drawing.pdf) diagrams for hardware setup.  
+Follow the [Version 2.2.1 Two-way System Drawing](./Version_2_2_1_Two-way_System_Drawing.pdf) diagrams for hardware setup.  
+
+For configuration setup and further hardware setup instructions, refer to the [Installation Instructions for Divisible Conference Rooms Version 2.2](./Installation_Instructions_for_Divisible_Conference_Rooms_Version_2_2.pdf) document in this repository.  
 
 Install GMM_Lib.js, JoinSplit.js and VoiceSwitch.js on each codec (primary and secondary)  
 
