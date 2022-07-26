@@ -18,6 +18,24 @@ or implied.
 const xapi = require('xapi');
 import { GMM } from './GMM_Lib'
 
+ //TODO: Make sure the way we turn on and off vuMeters does not conflict with how USB v3 Macro does it or at least listen to messages from it to coordinate
+
+/*
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++ This switcher module of the Divided-Combined Conference Room macro
++ is based on the Executive Room Voice Activated Switching macro
++ published at:
++ https://github.com/gve-sw/gve_devnet_webex_devices_executive_room_voice_activated_switching_macro
++ It will eventually be the standalone version of the Executive Room Voice Activated Switching macro
++ In the context of the Divided-Combined Conference Room macro, it needs to be configured as needed
++ for when the rooms are SEPARATE or SPLIT following the restrictions imposed by the Join-Split room design
++ The macro will change the switching behavior of both the primary and secondary rooms when in combined
++ mode and switch back to what you configure here when the rooms are split again. 
++ IMPORTANT: Turn on the JoinSplit and VoiceSwitch macros on the Primary codec before turning them on
++ in the secondary since permanent memory storage in the Primary contains the correct combined or split
++ state of the rooms in case the devices reset or power cycle and need to revert to that persistent state. 
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+*/
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // INSTALLER SETTINGS
@@ -33,7 +51,7 @@ import { GMM } from './GMM_Lib'
 
 // The SWITCHER_ROLE const tells the macro in the particular codec it is running
 // what role it should play; SWITCHER_MAIN or SWITCHER_AUX
-//NOTE: if you install the JoinSplit macro on the same codec, this role must be SWITCHER_MAIN
+//NOTE: if you install the JoinSplit macro on the same codec, this role MUSt be SWITCHER_MAIN
 const SWITCHER_MAIN=1, SWITCHER_AUX=2
 const SWITCHER_ROLE=SWITCHER_MAIN
 
@@ -41,7 +59,8 @@ const SWITCHER_ROLE=SWITCHER_MAIN
 // one this is.
 // Here are instructions on how to configure local user accounts on Webex Devices: https://help.webex.com/en-us/jkhs20/Local-User-Administration-on-Room-and-Desk-Devices)
 // THESE ACCOUNTS ARE USED FOR HTTP POST COMMUNICATIONS.
-// NOTE: if there is no auxiliary codec, you must set the value of OTHER_SWITCHER_CODEC_IP to ''
+// NOTE: if there is no auxiliary codec or you are using the JoinSplit macro on the same codec, 
+// you must set the value of OTHER_SWITCHER_CODEC_IP to ''
 const OTHER_SWITCHER_CODEC_IP='10.0.0.10'
 const OTHER_SWITCHER_CODEC_USER=''
 const OTHER_SWITCHER_CODEC_PWD=''

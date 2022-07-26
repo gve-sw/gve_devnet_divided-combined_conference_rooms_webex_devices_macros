@@ -21,10 +21,44 @@ For configuration setup and further hardware setup instructions, refer to the [I
 
 Install GMM_Lib.js, JoinSplit.js and VoiceSwitch.js on each codec (primary and secondary)  
 
-Edit JoinSplit.js and VoiceSwitch.js on each codec and follow instructions in comments in first sections to edit constants as 
-applicable.  
+Here is a summary of their roles as modules of this Divided-Combined functionality: 
 
-Turn on only the JoinSplit and VoiceSwitch macros on each codec starting with those on the Primary and then on the Secondary codec.  
+### GMM_Lib.js  
+
+This is a library shared by various Webex Device macros that simplifies communication between codecs and modules on the same codec.  
+More details at: https://github.com/CiscoDevNet/roomdevices-macros-samples/tree/master/Global%20Macro%20Messaging  
+
+
+### JoinSplit.js  
+
+This is the standalone versions of the join/split macro module meant to work together with the Switcher and future Ducker 
+and USBMode modules via events on the same codec and across codecs with the GMM library.  
+Communications needed between Primary and Secondary codecs to keep the codec awake and set the correct 
+video layouts is delegated to the VoiceSwitch macros that should be installed and configured on the corresponding rooms  
+IMPORTANT: Turn on the JoinSplit macro on the Primary codec before turning it on in Secondary to give the macro a chance 
+to set PIN 4 to the correct Join/Split state according to what is stored in permanent storage.  
+
+Once you have installed JoinSplit.js in both the Primary and Secondary codecs, edit as needed the constants in  
+sections 1, 2 and 3 of that file before turning on the macro.  
+
+
+### VoiceSwitch.js  
+
+This switcher module of the Divided-Combined Conference Room macro is based on the Executive Room Voice Activated Switching macro published at: https://github.com/gve-sw/gve_devnet_webex_devices_executive_room_voice_activated_switching_macro  
+It will eventually be the standalone version of the Executive Room Voice Activated Switching macro  
+In the context of the Divided-Combined Conference Room macro, it needs to be configured as needed 
+for when the rooms are SEPARATE or SPLIT following the restrictions imposed by the Join-Split room design.  
+The macro will change the switching behavior of both the primary and secondary rooms when in combined 
+mode and switch back to what you configure here when the rooms are split again.  
+IMPORTANT: Turn on the JoinSplit and VoiceSwitch macros on the Primary codec before turning them on 
+in the secondary since permanent memory storage in the Primary contains the correct combined or split 
+state of the rooms in case the devices reset or power cycle and need to revert to that persistent state.  
+
+Once you have installed VoiceSwitch.js in both the Primary and Secondary codecs, edit as needed the constants in  
+sections 1, 2, 3, 4 and 5 of that file before turning on the macro.  
+
+
+IMPORTANT: Turn on only the JoinSplit and VoiceSwitch macros on each codec starting with those on the Primary and then on the Secondary codec.  DO NOT turn on the GMM_Lib macro, it is just a library included by the other two.   
 
 ## Usage  
 

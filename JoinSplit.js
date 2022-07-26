@@ -15,33 +15,22 @@ or implied.
 const xapi = require('xapi');
 import { GMM } from './GMM_Lib'
 
-
 /*
- TODOs:
-1) Macro issues many of the same commands at least twice when setting the voltage on pin 4 and then in the handler of that voltage. 
-There does not seem to be good consistency: Enrico: PLEASE clean up indeed!  Enrico will find out what the "rules " are for when 
-there are wall sensor vs. Touch 10 manual request conflicts. 
-
-2) Review the limitations I imposed to Input 2 and mic8 in PRIMARY and video inputs 3 and 4 in secondary so splitter macro does not conflict
-
-3) Make sure the way we turn on and off vuMeters does not conflict with how USB v3 Macro does it or at least listen to messages from it to coordinate
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++ This is the standalone versions of the join/split macro module meant to work together with the Switcher 
+and future Ducker and USBMode modules via events on the same codec and across codecs with the GMM library.
++ Communications needed between Primary and Secondary codecs to keep the codec awake and set the correct 
++ video layouts is delegated to the VoiceSwitch macros that should be installed and configured on the corresponding rooms 
++ IMPORTANT: Turn on the JoinSplit macro on the Primary codec before turning it on in Secondary to give the macro a chance
++ to set PIN 4 to the correct Join/Split state according to what is stored in permanent storage.
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 */
 
-
-
-
-// This is the standalone verions of the join/split macro meant to work together with the switcher, ducker and USBMode macros
-// via events on the same codec and across codecs with the GMM library
-// Communications needed to keep the codec awake and set the correct video layouts is delegated to the switcher macro it depends on
-// which should be installed on the same codecs
-// IMPORTANT: Turn on the JoinSplit macro on the Primary codec before turning it on in secondary to give the macro a chance
-// to set PIN 4 to the correct Join/Split state according to what is stored in permanent storage.
-
-
-/////////////////////////////////////////////////////////////////////////////////////////
-// CONSTANTS/ENUMS
-/////////////////////////////////////////////////////////////////////////////////////////
-
+/*
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++ SECTION 1 - SECTION 1 - SECTION 1 - SECTION 1 - SECTION 1 - SECTION 1 +
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+*/
 
 // The JOIN_SPLIT_ROOM_ROLE const tells the macro in the particular codec it is running
 // what role it should play; JS_PRIMARY or JS_SECONDARY
@@ -62,6 +51,15 @@ const JOIN_SPLIT_CONFIG = {
   OTHER_CODEC_PWD : ''
 }
 
+
+/*
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++ SECTION 2 - SECTION 2 - SECTION 2 - SECTION 2 - SECTION 2 - SECTION 2 
++ Only for use on PRIMARY Codec (i.e set ROOM_ROLE : JS_PRIMARY above, then fill this section
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+*/
+
+
 // USE_WALL_SENSOR controls if you use a physical wall sensor or not
 // If set to false, you will get a custom panel to manually switch rooms from join to split
 // If set to true, you will get a PIN protected override button, in case the wall sensor is broken
@@ -69,24 +67,12 @@ const JOIN_SPLIT_CONFIG = {
 const USE_WALL_SENSOR=false
 
 /*
-  Change the override protect PINs here if  USE_WALL_SENSOR=true above
+  Change the override protect PINs here if wanted and if USE_WALL_SENSOR=true above
 */
 const COMBINE_PIN = "1234";
 const SPLIT_PIN = "4321";
 const FIXED_SENSOR="5678";
 
-
-// SECONDARY_SPLIT_MODE_VIDEO_MONITORS contains the option for the 'Video Monitors' setting 
-// for when in split mode which can be 'Single', 'Dual' or 'Triple'
-//TODO: on Secondary, store away number of monitors configured before going combined
-// so we can set back to what it was. This should be upon config so should not need permanent
-// storage, but if it does, then will have to retrieve current value, store in GMM and 
-// retrieve again which is more time consuming than this constant
-const SECONDARY_SPLIT_MODE_VIDEO_MONITORS='Dual'
-
-// Change SECONDARY_COMBINED_VOLUME_CHANGE_STEPS if you want to adjust the volume on the secondary
-// codec when switching modes. 
-const SECONDARY_COMBINED_VOLUME_CHANGE_STEPS=10
 
 // USE_ALTERNATE_COMBINED_PRESENTERTRACK_SETTINGS speficies if different settings should be used for presentertrack on primary codec
 // for combined and split modes. If set to true, you must modify the settings for presentertrack to use for each scenario in the 
@@ -107,16 +93,32 @@ const COMBINED_PRESENTERTRACK_SETTINGS = {
   TRIGGERZONE: '0,89,549,898'
 } //Replace these placeholder values with your actual values.
 
+/*
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++ SECTION 3 - SECTION 3 - SECTION 3 - SECTION 3 - SECTION 3 - SECTION 3 +
++ Only for use on SECONDARY Codec (i.e set ROOM_ROLE : JS_SECONDARY above, then fill this section
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+*/
+
+// SECONDARY_SPLIT_MODE_VIDEO_MONITORS contains the option for the 'Video Monitors' setting 
+// for when in split mode which can be 'Single', 'Dual' or 'Triple'
+//TODO: on Secondary, store away number of monitors configured before going combined
+// so we can set back to what it was. This should be upon config so should not need permanent
+// storage, but if it does, then will have to retrieve current value, store in GMM and 
+// retrieve again which is more time consuming than this constant
+const SECONDARY_SPLIT_MODE_VIDEO_MONITORS='Dual'
+
+// Change SECONDARY_COMBINED_VOLUME_CHANGE_STEPS if you want to adjust the volume on the secondary
+// codec when switching modes. Each step is equivalent to a 0.5 dB change. 
+const SECONDARY_COMBINED_VOLUME_CHANGE_STEPS=10
 
 
-/////////////////////////////////////////////////////////////////////////////////////////
-// THIS NEXT SECTION CREATES A SEPARATE MACRO FOR NON-VOLATILE MEMORY "Memory_Storage"
-// IF THE MACRO ALREADY EXISTS, THIS SECTION DOES NOTHING
-/////////////////////////////////////////////////////////////////////////////////////////
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
 
+/*
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++ DO NOT EDIT ANYTHING BELOW THIS LINE                                  +
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+*/
 
 
 // communication between primary and secondary for purposes of combined mode is happening via GPIO Pins
