@@ -36,13 +36,14 @@ and future Ducker and USBMode modules via events on the same codec and across co
 // what role it should play; JS_PRIMARY or JS_SECONDARY
 const JS_PRIMARY=1, JS_SECONDARY=2, JS_NONE=0
 
-// Specify here the IP and local user account credentials of PRIMARY (room 1) or SECONDARY (room 2) codec depending on which
-// one this is. This will be stored in persistent memory for the switcher macro to use instead of it's own
-// main/aux settings when not working with joinsplit
-// Here are instructions on how to configure local user accounts on Webex Devices: https://help.webex.com/en-us/jkhs20/Local-User-Administration-on-Room-and-Desk-Devices)
-// THESE ACCOUNTS ARE USED FOR HTTP POST COMMUNICATIONS.
-// Also specify the room role for this particular codec in ROOM_ROLE (JS_PRIMARY or JS_SECONDARY)
-// and the input ID to use on the primary for the video tie line from secondary in PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID (typically 3)
+// In this section, write in the values for the constants below.
+// For ROOM_ROLE fill in either JS_PRIMARY or JS_SECONDARY as the value.
+// For PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID leave the value at 3, unless you are using the SDI input for the video tie line 
+// from the Secondary to the Primary Codec, in which case you would enter a value of 6.
+// For OTHER_CODEC_IP and the USER and PWD fields, if you filled in ROOM_ROLE : JS_PRIMARY, then you would enter the IP address 
+// and admin account credentials for the Secondary Codec.  If you filled in ROOM_ROLE : JS_SECONDARY, then you would enter the 
+// IP address and admin account credentials for the Primary Codec.
+// Instructions for creating these admin accounts are in the "Installation Instructions" document.
 const JOIN_SPLIT_CONFIG = {
   ROOM_ROLE : JS_PRIMARY,
   PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID: 3,
@@ -101,7 +102,7 @@ const COMBINED_PRESENTERTRACK_SETTINGS = {
 */
 
 // SECONDARY_SPLIT_MODE_VIDEO_MONITORS contains the option for the 'Video Monitors' setting 
-// for when in split mode which can be 'Single', 'Dual' or 'Triple'
+// for when in split mode which can be 'Single', 'Dual' or 'DualPresentationOnly'
 //TODO: on Secondary, store away number of monitors configured before going combined
 // so we can set back to what it was. This should be upon config so should not need permanent
 // storage, but if it does, then will have to retrieve current value, store in GMM and 
@@ -147,7 +148,11 @@ var roomCombined = false;
 // JoinSplit_wallSensorOverride to false and re-start the macro
 var wallSensorOverride = false;
 
-
+var JoinSplit_secondary_settings = {
+  UltrasoundMax : 0,
+  WakeupOnMotionDetection: '',
+  StandbyControl : ''
+}
 
 /**
   * The following functions allow the ability to set the Pins High or Low
@@ -198,13 +203,13 @@ function setWallSensorOverride(overrideValue) {
 
 }
 
-
-function setSecondaryUltrasoundMaxVolume(ultraSoundMaxValue) {
-  let secondaryUltrasoundMax = ultraSoundMaxValue;
-  GMM.write.global('JoinSplit_secondaryUltrasoundMax',secondaryUltrasoundMax).then(() => {
-    console.log({ Message: 'ChangeState', Action: 'secondary Ultrasound Max volume stored.' })
-  })
-
+async function storeSecondarySettings(ultraSoundMaxValue,wState,sState) {
+  JoinSplit_secondary_settings.UltrasoundMax=ultraSoundMaxValue;
+  JoinSplit_secondary_settings.WakeupOnMotionDetection=wState;
+  JoinSplit_secondary_settings.StandbyControl=sState;
+  await GMM.write.global('JoinSplit_secondary_settings',JoinSplit_secondary_settings).then(() => {
+    console.log({ Message: 'ChangeState', Action: 'secondary settings for Ultrasound, WakeupOnMotionDetection and StandbyControl stored.' })
+  });
 }
 
 
@@ -393,9 +398,9 @@ xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
   xapi.config.set('Audio Microphones Mute Enabled', 'True')
     .catch((error) => { console.error("13"+error); });
 
-// OUTPUT ARC SECTION (FOR QUAD CAMERA ONLY)
-  xapi.config.set('Audio Output ARC 1 Mode', 'On')
-    .catch((error) => { console.error("14"+error); });
+
+    
+
 
 // HDMI AUDIO OUTPUT
  xapi.Config.Audio.Output.ConnectorSetup.set('Manual');
@@ -403,7 +408,7 @@ xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
   xapi.config.set('Audio Output HDMI 1 Mode', 'On')
     .catch((error) => { console.error("15"+error); });
     // This is for embedded conference audio over to Secondary
-    // It should be switched on and off on Secondary input
+    // It will be switched on and off on Secondary input
   xapi.config.set('Audio Output HDMI 2 Mode', 'Off')
     .catch((error) => { console.error("16"+error); });
   xapi.config.set('Audio Output HDMI 3 Mode', 'On')
@@ -427,10 +432,10 @@ xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
     .catch((error) => { console.error("36"+error); });
 
 // MACROS
-  xapi.config.set('Macros AutoStart', 'On')
-    .catch((error) => { console.error("37"+error); });
-  xapi.config.set('Macros Mode', 'On')
-    .catch((error) => { console.error("38"+error); });
+//  xapi.config.set('Macros AutoStart', 'On')
+//    .catch((error) => { console.error("37"+error); });
+//  xapi.config.set('Macros Mode', 'On')
+//    .catch((error) => { console.error("38"+error); });
 
 // PERIPHERALS
   xapi.config.set('Peripherals Profile Cameras', 'Minimum1')
@@ -444,21 +449,14 @@ xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
   xapi.config.set('SerialPort Mode', 'On')
     .catch((error) => { console.error("42"+error); });
 
-// STANDBY
-  // xapi.config.set('Standby Control', 'On')
-    //  .catch((error) => { console.error("43"+error); });
-  // xapi.config.set('Standby WakeupOnMotionDetection', 'Off')
-    // .catch((error) => { console.error("44"+error); });
-    // This needs to be stored in memory on the Secondary, along with halfwake.
-    // All should be disabled when in Combined mode, and restored when Standalone.
 
 // VIDEO
   xapi.config.set('Video DefaultMainSource', '1')
     .catch((error) => { console.error("45"+error); });
   //xapi.command('Video Input SetMainVideoSource', {  ConnectorID: 1 }).catch((error) => { console.error("47"+error); }); //TODO Enrico testing
-  xapi.command('Video Input SetMainVideoSource', {  SourceID : JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID, SourceID: 1 }).catch((error) => { console.error("47"+error); }); //TODO Enrico testing
-  xapi.command('Video Selfview Set', {Mode: 'Off'})
-    .catch((error) => { console.error("48"+error); });
+  //xapi.command('Video Input SetMainVideoSource', {  SourceID : JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID, SourceID: 1 }).catch((error) => { console.error("47"+error); }); //TODO Enrico testing
+  //xapi.command('Video Selfview Set', {Mode: 'Off'})
+  //  .catch((error) => { console.error("48"+error); });
 
 // VIDEO INPUT SECTION
 // HDMI INPUT 1
@@ -480,9 +478,9 @@ xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
   .catch((error) => { console.error("56"+error); });
 
 // HDMI INPUT 2
-// THIS IS THE CAMERA FROM THE SECONDARY ROOM
-  xapi.config.set(`Video Input Connector ${JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID} HDCP Mode`, 'Off')
-    .catch((error) => { console.error("57"+error); });
+// THIS IS THE PRESENTER CAMERA 
+
+
   xapi.config.set(`Video Input Connector ${JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID} CameraControl Mode`, 'Off')
     .catch((error) => { console.error("58"+error); });
   xapi.config.set(`Video Input Connector ${JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID} InputSourceType`, 'other')
@@ -498,9 +496,9 @@ xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
   xapi.config.set(`Video Input Connector ${JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID} Visibility`, 'Never')
     .catch((error) => { console.error("64"+error); });
 
-// HDMI INPUT 3, 4, and 5 SHOULD BE CONFIGURED FROM THE WEB INTERFACE
-// SDI INPUT 6 SHOULD ALSO BE CONFIGURED FROM THE WEB INTERFACE
-// SDI INPUT 6 IS THE PREFERRED INPUT FOR PRESENTER TRACK
+// HDMI INPUT 4 and 5 SHOULD BE CONFIGURED FROM THE WEB INTERFACE
+// SDI INPUT 6 SHOULD ALSO BE CONFIGURED FROM THE WEB INTERFACE UNLESS IT IS USED FOR THE VIDEO TIE LINE FROM SECONDARY
+// SDI INPUT 6 CAN BE USED FOR EITHER THE VIDEO TIE LINE, OR FOR AN ADDITIONAL PTZ CAMERA (BUT NOT THE PRESENTER CAMERA)
 
 
 // VIDEO OUTPUT SECTION
@@ -526,7 +524,9 @@ function setSecondaryDefaultConfig() {
   xapi.Config.Audio.Output.ConnectorSetup.set('Manual');
   xapi.config.set('Audio Input HDMI 1 Mode', 'Off')
     .catch((error) => { console.error("4"+error); });
-  xapi.config.set('Audio Input HDMI 3 Mode', 'On')
+    xapi.config.set('Audio Input HDMI 2 Mode', 'Off')
+    .catch((error) => { console.error("5"+error); });
+  xapi.config.set('Audio Input HDMI 3 Mode', 'Off')
     .catch((error) => { console.error("5"+error); });
 
 // SET MICROPHONES
@@ -562,11 +562,8 @@ function setSecondaryDefaultConfig() {
   xapi.config.set('GPIO Pin 4 Mode', 'InputNoAction')
     .catch((error) => { console.error("41"+error); });
 
-// MACROS
-  xapi.config.set('Macros AutoStart', 'On')
-    .catch((error) => { console.error("42"+error); });
-  xapi.config.set('Macros Mode', 'On')
-    .catch((error) => { console.error("43"+error); });
+
+    
 
 // PERIPHERALS
   xapi.config.set('Peripherals Profile Cameras', 'Minimum1')
@@ -580,10 +577,6 @@ function setSecondaryDefaultConfig() {
   xapi.config.set('SerialPort Mode', 'On')
     .catch((error) => { console.error("47"+error); });
 
-// STANDBY
-  xapi.config.set('Standby Control', 'On').catch((error) => { console.error("48"+error); }); 
-  xapi.config.set('Standby WakeupOnMotionDetection', 'Off')
-    .catch((error) => { console.error("49"+error); });
 
 // VIDEO
 xapi.config.set('Video DefaultMainSource', '1')
@@ -592,8 +585,7 @@ xapi.config.set('Video DefaultMainSource', '1')
     .catch((error) => { console.error("51"+error); });
   xapi.command('Video Input SetMainVideoSource', {  ConnectorID: 1 })
     .catch((error) => { console.error("52"+error); });
-  xapi.command('Video Selfview Set', {Mode: 'Off'})
-    .catch((error) => { console.error("53"+error); });
+
 
 // VIDEO INPUT SECTION
 // HDMI INPUT 1
@@ -650,9 +642,9 @@ xapi.config.set('Video DefaultMainSource', '1')
   xapi.config.set('Video Input Connector 4 Visibility', 'Never')
     .catch((error) => { console.error("77"+error); });
 
-// HDMI INPUT 2 and 5 SHOULD BE CONFIGURED FROM THE WEB INTERFACE
+// HDMI INPUT 2 (PRESENTER CAMERA) and 5 SHOULD BE CONFIGURED FROM THE WEB INTERFACE
 // SDI INPUT 6 SHOULD ALSO BE CONFIGURED FROM THE WEB INTERFACE
-// SDI INPUT 6 IS THE PREFERRED INPUT FOR PRESENTER TRACK
+// SDI INPUT 6 CAN BE USED FOR AN ADDITIONAL PTZ CAMERA (BUT NOT THE PRESENTER CAMERA)
 
 // VIDEO OUTPUT SECTION
 // THESE SHOULD NOT BE CONFIGURED BY THE INSTALLER
@@ -994,8 +986,7 @@ function primaryCombinedMode()
   xapi.config.set('Conference FarEndControl Mode', 'Off')
     .catch((error) => { console.error("32"+error); });
 
-  xapi.Command.Video.Selfview.Set({ Mode: 'Off' }); // TODO Enrico testing
-  xapi.command('Video Matrix Reset').catch((error) => { console.error(error); }); // TODO Enrico testing
+  xapi.command('Video Matrix Reset').catch((error) => { console.error(error); }); 
 
   if (USE_ALTERNATE_COMBINED_PRESENTERTRACK_SETTINGS) {
     xapi.Config.Cameras.PresenterTrack.CameraPosition.Pan
@@ -1040,8 +1031,9 @@ function primaryStandaloneMode()
     xapi.Config.Cameras.PresenterTrack.TriggerZone
         .set(SPLIT_PRESENTERTRACK_SETTINGS.TRIGGERZONE);
   }
-    //Tell the codec in the SECONDARY room to go to split mode
-    otherCodec.command('SPLIT').post()
+    //Tell the codec in the SECONDARY room to go to split mode, not needed
+    // at the moment since we are using GPIO pins
+    //otherCodec.command('SPLIT').post()
 
     //Alert local macros that need to know that the room is splitting, mostly the switcher macro
     let gmm_status={
@@ -1061,6 +1053,8 @@ async function secondaryStandaloneMode()
   roomCombined=false;
   xapi.config.set('Audio Output Line 5 Mode', 'Off')
     .catch((error) => { console.error(error); });
+    xapi.config.set('Audio Input HDMI 3 Mode', 'Off')
+    .catch((error) => { console.error("5"+error); });
   /*
  SET ultrasound volume to stored value
  SET halfwakd mode to stored value
@@ -1069,21 +1063,41 @@ async function secondaryStandaloneMode()
 
  // decrease main volume by 5Db since it was increased by the same when combining rooms
  xapi.Command.Audio.Volume.Decrease({ Steps:  SECONDARY_COMBINED_VOLUME_CHANGE_STEPS});
- //Restore ultrasound volume if previously stored
- let secondaryUltrasoundMax=await GMM.read.global('JoinSplit_secondaryUltrasoundMax').catch(async e=>{
-      console.log("No JoinSplit_secondaryUltrasoundMax global detected.")
-      return -1;
-    })
-  if (secondaryUltrasoundMax>=0) {
-    xapi.Config.Audio.Ultrasound.MaxVolume.set(secondaryUltrasoundMax);
+
+  // restore secondary settings we stored away before combining
+ JoinSplit_secondary_settings=await GMM.read.global('JoinSplit_secondary_settings').catch(async e=>{
+  console.log("No JoinSplit_secondary_settings global detected.")
+  return JoinSplit_secondary_settings;
+ })
+ if (JoinSplit_secondary_settings.UltrasoundMax>=0) {
+  xapi.Config.Audio.Ultrasound.MaxVolume.set(JoinSplit_secondary_settings.UltrasoundMax);
+ if (JoinSplit_secondary_settings.WakeupOnMotionDetection != '') {
+    xapi.config.set('Standby WakeupOnMotionDetection', JoinSplit_secondary_settings.WakeupOnMotionDetection)
+    .catch((error) => { console.error(error); });
   }
+ if (JoinSplit_secondary_settings.StandbyControl != '') {
+  xapi.config.set('Standby Control', JoinSplit_secondary_settings.StandbyControl)
+  .catch((error) => { console.error(error); });
+  }
+
+
+
+ //Restore StandbyControl setting if previously stored
+ let ssecondaryStandbyControl=await GMM.read.global('JoinSplit_secondaryStandbyControl').catch(async e=>{
+  console.log("No JoinSplit_secondaryStandbyControl global detected.")
+  return '';
+  })
+  if (ssecondaryStandbyControl != '') {
+      xapi.config.set('Standby Control', ssecondaryStandbyControl)
+      .catch((error) => { console.error(error); });
+  }
+
 
   xapi.command('Conference DoNotDisturb Deactivate')
     .catch((error) => { console.error(error); });
   xapi.Config.Video.Monitors.set(SECONDARY_SPLIT_MODE_VIDEO_MONITORS); // TODO Enrico testing
   xapi.command('Video Matrix Reset', { Output: 1 })
     .catch((error) => { console.error(error); });
-  xapi.config.set('Standby Control', 'On').catch((error) => { console.error(error); });
   xapi.config.set('UserInterface OSD Mode', 'Auto')
     .catch((error) => { console.error("90"+error); });
   let gmm_status={
@@ -1101,25 +1115,33 @@ async function secondaryCombinedMode()
     .catch((error) => { console.error("91"+error); });
   xapi.config.set('Audio Output Line 5 Mode', 'On')
     .catch((error) => { console.error(error); });
+    xapi.config.set('Audio Input HDMI 3 Mode', 'On')
+    .catch((error) => { console.error("5"+error); });
+  xapi.Command.Video.Selfview.Set({ Mode: 'Off' });
 
   // increase main volume by 5db, will decrease upon splitting again
   xapi.Command.Audio.Volume.Increase({ Steps: SECONDARY_COMBINED_VOLUME_CHANGE_STEPS});
 
-  //grab current ultrasound Max Volume  
+  
+  //grab current secondary settings before overwriting for combining  
   let ultraSoundMaxValue = await xapi.Config.Audio.Ultrasound.MaxVolume.get()
+  let standbyWakeupMotionValue=await xapi.Config.Standby.WakeupOnMotionDetection.get()
+  let standbyControlValue=await xapi.Config.Standby.Control.get()
 
-  // store it away in persistent storage
-  setSecondaryUltrasoundMaxVolume(ultraSoundMaxValue);
+  // store it them in persistent storage
+ await storeSecondarySettings(ultraSoundMaxValue, standbyWakeupMotionValue, standbyControlValue);
   
   xapi.config.set('Audio Ultrasound MaxVolume', '0')
     .catch((error) => { console.error(error); }); // This is so that nobody can pair
   // with the codec when Combined
 
-  /*
- SET ultrasound volume to zero
- SET halfwakd mode to manual
- SET WeakuOnMotionDetect to off
-  */
+  xapi.config.set('Standby WakeupOnMotionDetection', 'Off')
+    .catch((error) => { console.error(error); });
+
+  //turn off for combined mode so we only control this from primary
+  xapi.config.set('Standby Control', 'Off').catch((error) => { console.error(error); }); 
+
+  
 
   xapi.command('Conference DoNotDisturb Activate')
     .catch((error) => { console.error(error); });
@@ -1128,7 +1150,6 @@ async function secondaryCombinedMode()
   xapi.command('Video Matrix Assign', { Output: 3, SourceID: 1 }).catch((error) => { console.error(error); });
   xapi.command('Video Matrix Assign', { Output: 1, SourceID: 3 }).catch((error) => { console.error(error); });
   xapi.command('Video Matrix Assign', { Output: 2, SourceID: 4 }).catch((error) => { console.error(error); });
-  xapi.config.set('Standby Control', 'Off').catch((error) => { console.error(error); }); 
   let gmm_status={
     'Action': 'ROOMS_JOINED',
     'roomRole': JOIN_SPLIT_CONFIG.ROOM_ROLE  //this is just a placeholder for any other info we might want to send

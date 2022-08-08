@@ -21,7 +21,7 @@ import { GMM } from './GMM_Lib'
  //TODO: Make sure the way we turn on and off vuMeters does not conflict with how USB v3 Macro does it or at least listen to messages from it to coordinate
 
 /*
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 + This switcher module of the Divided-Combined Conference Room macro
 + is based on the Executive Room Voice Activated Switching macro
 + published at:
@@ -34,7 +34,7 @@ import { GMM } from './GMM_Lib'
 + IMPORTANT: Turn on the JoinSplit and VoiceSwitch macros on the Primary codec before turning them on
 + in the secondary since permanent memory storage in the Primary contains the correct combined or split
 + state of the rooms in case the devices reset or power cycle and need to revert to that persistent state. 
-+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 */
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -49,18 +49,21 @@ import { GMM } from './GMM_Lib'
 */
 
 
-// The SWITCHER_ROLE const tells the macro in the particular codec it is running
-// what role it should play; SWITCHER_MAIN or SWITCHER_AUX
-//NOTE: if you install the JoinSplit macro on the same codec, this role MUSt be SWITCHER_MAIN
+// THIS MACRO IS USED FOR TWO USE CASES:
+// 1. IT MUST BE INSTALLED ON THE PRIMARY CODEC IN A DIVIDED-COMBINED ROOM. SET "const SWITCHER-ROLE=SWITCHER_MAIN" BELOW.
+// 2. IT CAN BE INSTALLED ON THE SECONDARY CODEC IF YOU PLAN TO DO MICROPHONE-BASED CAMERA SWITCHING IN THAT ROOM.  In that case, set 
+// "const SWITCHER_ROLE=SWITCHER_AUX"
 const SWITCHER_MAIN=1, SWITCHER_AUX=2
 const SWITCHER_ROLE=SWITCHER_MAIN
 
-// Specify here the IP and local user account credentials of MAIN or AUX codec depending on which
-// one this is.
-// Here are instructions on how to configure local user accounts on Webex Devices: https://help.webex.com/en-us/jkhs20/Local-User-Administration-on-Room-and-Desk-Devices)
-// THESE ACCOUNTS ARE USED FOR HTTP POST COMMUNICATIONS.
-// NOTE: if there is no auxiliary codec or you are using the JoinSplit macro on the same codec, 
-// you must set the value of OTHER_SWITCHER_CODEC_IP to ''
+// THIS SECTION IS USED **ONLY** IF YOU HAVE TWO QUAD CAMERAS - AND THEREFORE A CODEC PRO AND AN AUX CODEC PLUS - IN THE **SAME ROOM**.
+// IN THAT CASE YOU WOULD INSTALL THIS MACRO BOTH ON THE CODEC PRO AND THE AUX CODEC PLUS.
+// FILL IN THE IP ADDRESS AND ADMIN USER ACCOUNTS FOR THE COUNTERPART CODEC.  IN OTHER WORDS, ON THE CODEC PRO, ENTER IN THE IP ADDRESS
+// AND AUTHENTICATION FOR THE AUX CODEC PLUS.
+// ON THE OTHER HAND, ON THE AUX CODEC PLUS, ENTER IN THE IP ADDRESS
+// AND AUTHENTICATION FOR THE CODEC PRO.
+// INSTRUCTIONS FOR SETTING UP ADMIN ACCOUNTS ARE IN THE "Installation Instructions" DOCUMENT.
+// NOTE: if there is no AUX CODEC PLUS you must set the value of OTHER_SWITCHER_CODEC_IP to '' (BLANK) AND LEAVE THE USER AND PASSWORD BLANK.
 const OTHER_SWITCHER_CODEC_IP='10.0.0.10'
 const OTHER_SWITCHER_CODEC_USER=''
 const OTHER_SWITCHER_CODEC_PWD=''
@@ -73,7 +76,7 @@ const OTHER_SWITCHER_CODEC_PWD=''
 */
 
 // Video source and SpeakerTrack constants needed for defining mapping. DO NOT EDIT
-const  SP=0, V1=1, V2=2, V3=3
+const  SP=0, V1=1, V2=2, V3=3, V4=4, V5=5, V6=6
 
 /*
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -115,18 +118,23 @@ const Z2= {'primary': 14, 'secondary': 13} // These are ok to change
 // Microphone Input Numbers to Monitor
 // Specify the input connectors associated to the microphones being used in the room
 // For example, if you set the value to [1,2,3,4,5,6,7,8] the macro will evaluate mic input id's 1-8 for its switching logic
+// NOTE: In this list, use only the actual microphone inputs that you are using for switching. You do NOT have to list all 8 microphone inputs.
 const MICROPHONE_CONNECTORS = [1,2,3,4,5,6,7,8];
 
 // Camera source IDs that correspond to each microphone in MICROPHONE_CONNECTORS array
 // Associate the connectors to specific input source type/id corresponding to the camera that covers where the mic is located.
 // For example, if you set MICROPHONE_CONNECTORS = [1,2,3,4,5,6,7,8] and MAP_CAMERA_SOURCES to [V1,V1,V1,V2,V2,V2,Z1,Z2]
 // you are specifying that
-// mics 1,2 and 3 located where Camera associated to video input 1 (V1) is pointing at and
-// mics 4,5 and 6 are located where Camera associated to video input 2 (V2) is pointing at and
+// mics 1,2 located where Camera associated to video input 1 (V1) is pointing at and
+// mics 3,4 are located where Camera associated to video input 2 (V2) is pointing at and
+// mics 5,6 are located where Camera associated to video input 3 (V3) is pointing at and
 // mic 7 is associated to PTZ camera defined in the zone Z1 object above and
 // mic 8 is associated to PTZ camera defined in the zone Z2 object above
-// Valid values for entries in the MAP_CAMERA_SOURCES array are: SP, V1-V2 and Z1-Z8
-const MAP_CAMERA_SOURCES = [V1,V1,V2,V2,V3,V3,Z1,Z2];
+// Valid values for entries in the MAP_CAMERA_SOURCES array are: SP, V1-V6 and Z1-Z8
+// NOTE: IF THIS IS THE PRIMARY CODEC, you must map microphone input 8 either to V3 or V6.  The default is V3.
+// This value must be the same as "PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID" which is found in + SECTION 1 + of the JoinSplit macro, 
+// which - again - will be either V3 or V6.
+const MAP_CAMERA_SOURCES = [V1,V1,V2,V2,Z1,Z2,Z1,V3];
 
 // Specifying which sourceID belongs to local QuadCam
 // MAIN_CODEC_QUADCAM_SOURCE_ID should contain the SourceID where the QuadCam connected
@@ -198,15 +206,40 @@ const INITIAL_CALL_TIME = 15000; // 15 seconds
 // transmitting video during camera movement for P60 and PTZ cameras
 const VIDEO_SOURCE_SWITCH_WAIT_TIME = 500; // 500 ms
 
-/////////////////////////////////////////////////////////////////////////////////////////
-// CONSTANTS/ENUMS
-/////////////////////////////////////////////////////////////////////////////////////////
-
-
 
 // Microphone High/Low Thresholds
 const MICROPHONELOW  = 6;
 const MICROPHONEHIGH = 25;
+
+/*
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++ SECTION 6 - SECTION 6 - SECTION 6 - SECTION 6 - SECTION 6 - SECTION 6 +
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+Presenter Track Q&A Mode
+*/
+
+// PRESENTER_QA_MODE specifies if you want to emulate Q&A mode when PresenterTrack is active. 
+// In this mode, if microphone other than the one designated for the Presenter detects sustained
+// activity, the outgoing video for the meeting will be composed between the presenter and the video
+// source assigned to the microphone where the sustained activity was detected. 
+// NOTE: this is not supported when using SpeakerTrack 60 cameras for the main audience
+const PRESENTER_QA_MODE = false
+
+
+//PRESENTER_QA_AUDIENCE_MIC_IDS is an array for Mic IDs that are being used for the audience. 
+const PRESENTER_QA_AUDIENCE_MIC_IDS=[1,2]
+
+
+// PRESENTER_QA_KEEP_COMPOSITION_TIME is the time in ms that the macro will keep sending
+// a composed image of the presenter and an audience member asking a question after the question
+// has been asked by any audience member. If different audience members ask questions while the composition 
+// is being shown after NEW_SPEAKER_TIME milliseconds have passed, the composition will change 
+// to use that new audience member instead of the original. This will continue until no other audience members have
+// spoken for PRESENTER_QA_KEEP_COMPOSITION_TIME milliseconds and then the code will resume sending only the 
+// full video feed from the Presenter camera 
+const PRESENTER_QA_KEEP_COMPOSITION_TIME =7000  
+
 
 /*
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -273,10 +306,10 @@ var AUX_CODEC={ enable: (AUX_CODEC_IP!='') , online: false};
 // what role it should play; JS_PRIMARY or JS_SECONDARY
 const JS_PRIMARY=1, JS_SECONDARY=2, JS_NONE=0
 
-
+// initializing JOIN_SPLIT_CONFIG below, actual values will be read from memory macro and do no have to be set here
 var JOIN_SPLIT_CONFIG = {
   ROOM_ROLE : JS_NONE,
-  PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID: 3,
+  PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID: 0,
   OTHER_CODEC_IP : '',
   OTHER_CODEC_USER : '',
   OTHER_CODEC_PWD : ''
@@ -353,7 +386,7 @@ function validate_joinsplit_compatible_config(role) {
         }
         if (!valid_primary_inputs) {
             let message = { Error: 'Switcher macro disabled',
-            Message: 'When JoinSplit Macro is present and in PRIMARY room, MAP_CAMERA_SOURCES should include V2 and be mapped to mic ID 8 in MICROPHONE_CONNECTORS. Please correct and try again.' }
+            Message: 'When JoinSplit Macro is present and in PRIMARY room, MAP_CAMERA_SOURCES should include PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID and be mapped to mic ID 8 in MICROPHONE_CONNECTORS. Please correct and try again.' }
             monitorOnAutoError(message);
         }
     }
@@ -393,6 +426,10 @@ let lastActivePTZCameraZoneObj=Z0;
 let lastActivePTZCameraZoneCamera='0';
 
 let micHandler= () => void 0;
+
+let presenterTracking=false;
+let presenterQAKeepComposition=false;
+let qaCompositionTimer=null;
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // UTILITIES
@@ -561,7 +598,7 @@ function aux_init() {
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // STARTUP SCRIPT
-// The following sections constitute a startup script that the codec will run whenever it
+// The following sections constitute a startup script that the AUX CODEC PLUS will run whenever it
 // boots.
 /////////////////////////////////////////////////////////////////////////////////////////
 
@@ -709,49 +746,106 @@ async function makeCameraSwitch(input, average) {
   // we want to use for switching camera input
   var selectedSource=MAP_CAMERA_SOURCES[MICROPHONE_CONNECTORS.indexOf(input)]
 
-// We do not need to check for  has_SpeakerTrack below because we are implicitly
-// checking for that by evaluating typeof selectedSource
-  if (typeof selectedSource == 'number') {
-    if (selectedSource==SP) {
-        // if the active camera is a SpeakerTrack camera, just activate it, no need to set main video source to it
-        console.log('Switching to SpeakerTrack camera');
-        xapi.command('Cameras SpeakerTrack Activate').catch(handleError);
-    }
-    else {
-          // the Video Input SetMainVideoSource does not work while Speakertrack is active
-          // so we need to turn it off in case the previous video input was from a source where
-          // SpeakerTrack is used.
-          xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
-           // Switch to the source that is speficied in the same index position in MAP_CAMERA_SOURCE_IDS
-          let sourceDict={ SourceID : '0'}
-          sourceDict["SourceID"]=selectedSource.toString();
-          console.log("Switching to input with SetMainVideoSource with dict: ", sourceDict  )
-          xapi.command('Video Input SetMainVideoSource', sourceDict).catch(handleError);
-          if ((MAP_CAMERA_SOURCES.indexOf(SP)==-1) && (selectedSource==MAIN_CODEC_QUADCAM_SOURCE_ID) ) {
-              // if the codec is using a QuadCam (no SpeakerTrack camera allowed) then
-              // turn back on SpeakerTrack function on the codec in case it was turned off in side by side mode.
-              xapi.command('Cameras SpeakerTrack Activate').catch(handleError);
+  if (PRESENTER_QA_MODE && presenterTracking) {
+    // if we have selected Presenter Q&A mode and the codec is currently in presenterTrack mode, invoke
+    // that specific camera switching logic contained in presenterQASwitch()
+    presenterQASwitch(input, selectedSource);
+  }
+  else
+  {
+    // We do not need to check for  has_SpeakerTrack below because we are implicitly
+    // checking for that by evaluating typeof selectedSource
+      if (typeof selectedSource == 'number') {
+        if (selectedSource==SP) {
+            // if the active camera is a SpeakerTrack camera, just activate it, no need to set main video source to it
+            console.log('Switching to SpeakerTrack camera');
+            xapi.command('Cameras SpeakerTrack Activate').catch(handleError);
+        }
+        else {
+              // the Video Input SetMainVideoSource does not work while Speakertrack is active
+              // so we need to turn it off in case the previous video input was from a source where
+              // SpeakerTrack is used.
+              xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
+              // Switch to the source that is speficied in the same index position in MAP_CAMERA_SOURCE_IDS
+              let sourceDict={ SourceID : '0'}
+              sourceDict["SourceID"]=selectedSource.toString();
+              console.log("Switching to input with SetMainVideoSource with dict: ", sourceDict  )
+              xapi.command('Video Input SetMainVideoSource', sourceDict).catch(handleError);
+              if ((MAP_CAMERA_SOURCES.indexOf(SP)==-1) && (selectedSource==MAIN_CODEC_QUADCAM_SOURCE_ID) ) {
+                  // if the codec is using a QuadCam (no SpeakerTrack camera allowed) then
+                  // turn back on SpeakerTrack function on the codec in case it was turned off in side by side mode.
+                  xapi.command('Cameras SpeakerTrack Activate').catch(handleError);
+              }
           }
+          // if we are not switching to a camera zone with PTZ cameras, we need to re-set the
+          // lastActivePTZCameraZone Object to the "non-camera" value of Z0 as when we started the macro
+          // because the decision tree on switching or not from a camera that was already pointed at someone
+          // relies on the last video input source having been a PTZ camera video zone
+          lastActivePTZCameraZoneObj=Z0;
+          lastActivePTZCameraZoneCamera='0';
+        }
+      else if (typeof selectedSource == 'object') {
+            switchToVideoZone(selectedSource, true);
       }
-      // if we are not switching to a camera zone with PTZ cameras, we need to re-set the
-      // lastActivePTZCameraZone Object to the "non-camera" value of Z0 as when we started the macro
-      // because the decision tree on switching or not from a camera that was already pointed at someone
-      // relies on the last video input source having been a PTZ camera video zone
-      lastActivePTZCameraZoneObj=Z0;
-      lastActivePTZCameraZoneCamera='0';
-    }
-   else if (typeof selectedSource == 'object') {
-        switchToVideoZone(selectedSource);
+
+
+      // send required messages to auxiliary codec that also turns on speakertrack over there
+      sendIntercodecMessage(AUX_CODEC, 'automatic_mode');
+      lastActiveHighInput = input;
+      restartNewSpeakerTimer();
+  }
+}
+
+// function to actually switch the camera input when in presentertrack Q&A mode
+async function presenterQASwitch(input, selectedSource) {
+
+   if (!(PRESENTER_QA_AUDIENCE_MIC_IDS.includes(input))) {
+    // Once the presenter starts talkin, we need to initiate composition timer
+    // to remove composition only after the configured time has passed.
+    restartCompositionTimer();
+    //if (!presenterQAKeepComposition) {
+    //  recallFullPresenter();
+    // }
    }
+   else if (selectedSource!=SP) // SpeakerTrack 60 cameras not supported for composing Presenter with Audience member asking questions
+   {
+    // here we need to compose presenter with other camera where someone is speaking
+    let presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
+    let connectorDict={ ConnectorId : [presenterSource,selectedSource]};
+    console.log("Trying to use this for connector dict in recallSideBySideMode(): ", connectorDict  )
+
+    if (typeof selectedSource == 'number') {
+      // the source other than presenter is not a preset, switch right away
+      setComposedQAVideoSource(connectorDict);
+    }
+    else if (typeof selectedSource == 'object') {
+          // the source other than the presenter is a preset, set it and delayed swithching
+      switchToVideoZone(selectedSource, false);       // just set the prefix first
+      setTimeout(function() {
+        setComposedQAVideoSource(connectorDict);
+        }, VIDEO_SOURCE_SWITCH_WAIT_TIME);
+    }
+
+    // Restart the timer that tells how long to keep the composition for when the same
+    // person is asking questions or the presenter is talking
+    //restartCompositionTimer();
+
+    // Actually, when audience members speak, we must stop the composition
+    // timer since only silence or speaker speaking should start it!
+    stopCompositionTimer();
+
+
+  } 
 
 
   // send required messages to auxiliary codec that also turns on speakertrack over there
   sendIntercodecMessage(AUX_CODEC, 'automatic_mode');
+
   lastActiveHighInput = input;
   restartNewSpeakerTimer();
 }
 
-async function switchToVideoZone(selectedSource) {
+async function switchToVideoZone(selectedSource, makeSwitch) {
            // The mic input mapped to a PTZ camera is to be selected, first check that camera zone was already being used
             if (lastActivePTZCameraZoneObj==selectedSource) {
                 // same camera zone as before, so we do not want to change the inUse value of that zone object (keep it inUse=true)
@@ -784,11 +878,13 @@ async function switchToVideoZone(selectedSource) {
                 console.log('Switching to preset ID: '+thePresetId+' which uses camera: '+lastActivePTZCameraZoneCamera);
                 xapi.Command.Camera.Preset.Activate({ PresetId: thePresetId });
 
+                if (makeSwitch)
+                {
                 // now set main video source to where the camera is connected
                 setTimeout(function() {
                             setMainVideoSource(thePresetVideoSource);
                             }, VIDEO_SOURCE_SWITCH_WAIT_TIME);
-
+                }
             }
 
 }
@@ -803,6 +899,25 @@ function setMainVideoSource(thePresetVideoSource) {
     sourceDict["SourceID"]=thePresetVideoSource.toString();
     console.log("In setMainVideoSource() switching to input with SetMainVideoSource with dict: ", sourceDict  )
     xapi.command('Video Input SetMainVideoSource', sourceDict).catch(handleError);
+}
+
+
+function setComposedQAVideoSource(connectorDict) {
+  // the Video Input SetMainVideoSource does not work while Speakertrack is active
+  // so we need to turn it off in case the previous video input was from a source where
+  // SpeakerTrack is used.
+  //TODO: If we turn this off here do we need to turn it back on if not using a preset for other
+  // person speaking?
+  if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
+  console.log("In setComposedQAVideoSource() switching to input with SetMainVideoSource with dict: ", connectorDict  )
+  xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+
+  if ((MAP_CAMERA_SOURCES.indexOf(SP)==-1) && (connectorDict.ConnectorId[1]==MAIN_CODEC_QUADCAM_SOURCE_ID) ) {
+    // if the composition is using a QuadCam configured on the codec (no SpeakerTrack camera allowed) 
+    // for the audience speaker portion of the composition then
+    // turn back on SpeakerTrack function on the codec
+    xapi.command('Cameras SpeakerTrack Activate').catch(handleError);
+  }
 }
 
 function largestMicValue() {
@@ -830,45 +945,114 @@ function averageArray(arrayIn) {
 }
 
 async function recallSideBySideMode() {
-  //first we need to clear out the lastActivePTZCameraZone vars since we want to make sure
-  // that after SideBySideMode is called, the next call to switchToVideoZone() does actually force
-  // a switch
-  lastActivePTZCameraZoneObj=Z0;
-  lastActivePTZCameraZoneCamera='0';
-  if (overviewShowDouble) {
-        let connectorDict={ ConnectorId : [0,0]};
-        connectorDict["ConnectorId"]=OVERVIEW_DOUBLE_SOURCE_IDS;
-        console.log("Trying to use this for connector dict in recallSideBySideMode(): ", connectorDict  )
-        xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
-        if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
-        xapi.command('Camera Preset Activate', { PresetId: 30 }).catch(handleError);
-    }
-    else {
-        // Check for OVERVIEW_PRESET_ZONE. If set to default Z0, just SetMainVideoSource
-        if (OVERVIEW_PRESET_ZONE == Z0) {
-            let sourceDict={ SourceID : '0'};
-            sourceDict["SourceID"]=OVERVIEW_SINGLE_SOURCE_ID.toString();
-            console.log("Trying to use this for source dict in recallSideBySideMode(): ", sourceDict  )
-            xapi.command('Video Input SetMainVideoSource', sourceDict).catch(handleError);
-            if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
-        }
-        else {
-                // If OVERVIEW_PRESET_ZONE is defined as something other than Z0, switch to that
-                console.log('Recall side by side mode switching to preset OVERVIEW_PRESET_ZONE...');
-                if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
-                switchToVideoZone(OVERVIEW_PRESET_ZONE);
-        }
-    }
-  // send required messages to other codecs
-  sendIntercodecMessage(AUX_CODEC, 'side_by_side');
-  lastActiveHighInput = 0;
-  lowWasRecalled = true;
+  // only invoke SideBySideMode if not in presenter QA mode and not presentertrack is currently not active
+  // because Presenter QA mode has it's own way of composing side by side. 
+  if (PRESENTER_QA_MODE && presenterTracking ) {
+    // If in presentertrack mode and we go to silence, we need to restart the composition timer
+    // to remove composition (if it was there) only after the configured time has passed.
+    restartCompositionTimer();
+  }
+  else 
+  {
+    //first we need to clear out the lastActivePTZCameraZone vars since we want to make sure
+    // that after SideBySideMode is called, the next call to switchToVideoZone() does actually force
+    // a switch
+    lastActivePTZCameraZoneObj=Z0;
+    lastActivePTZCameraZoneCamera='0';
+    if (overviewShowDouble) {
+          let connectorDict={ ConnectorId : [0,0]};
+          connectorDict["ConnectorId"]=OVERVIEW_DOUBLE_SOURCE_IDS;
+          console.log("Trying to use this for connector dict in recallSideBySideMode(): ", connectorDict  )
+          xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+          if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
+          xapi.command('Camera Preset Activate', { PresetId: 30 }).catch(handleError);
+      }
+      else {
+          // Check for OVERVIEW_PRESET_ZONE. If set to default Z0, just SetMainVideoSource
+          if (OVERVIEW_PRESET_ZONE == Z0) {
+              let sourceDict={ SourceID : '0'};
+              sourceDict["SourceID"]=OVERVIEW_SINGLE_SOURCE_ID.toString();
+              console.log("Trying to use this for source dict in recallSideBySideMode(): ", sourceDict  )
+              xapi.command('Video Input SetMainVideoSource', sourceDict).catch(handleError);
+              if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
+          }
+          else {
+                  // If OVERVIEW_PRESET_ZONE is defined as something other than Z0, switch to that
+                  console.log('Recall side by side mode switching to preset OVERVIEW_PRESET_ZONE...');
+                  if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
+                  switchToVideoZone(OVERVIEW_PRESET_ZONE);
+          }
+      }
+    // send required messages to other codecs
+    sendIntercodecMessage(AUX_CODEC, 'side_by_side');
+    lastActiveHighInput = 0;
+    lowWasRecalled = true;
+  }
 }
 
+async function recallFullPresenter() {
+  console.log("Recalling full presenter in PresenterTrack mode....")
+  // the Video Input SetMainVideoSource does not work while Speakertrack is active
+  // so we need to turn it off in case the previous video input was from a source where
+  // SpeakerTrack is used.
+  xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
+  let presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
+  let connectorDict={ ConnectorId : presenterSource};
+  xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+
+}
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // TOUCH 10 UI FUNCTION HANDLERS
 /////////////////////////////////////////////////////////////////////////////////////////
+
+
+xapi.event.on('UserInterface Extensions Panel Clicked', (event) =>
+{
+    if(event.PanelId == 'panel_toggle_presentertrack')
+    {
+      if (PRESENTER_QA_MODE) {
+        if (presenterTracking) {
+          console.log("Turning off PresenterTrack...");
+          recallFullPresenter();
+          xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Off' });
+        } 
+        else
+        {
+          console.log("Turning on PresenterTrack...");
+          xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' }); //TODO: Setting to Follow or Persistent both work, need to sort out which to keep
+        }
+      }
+    }
+});
+
+
+function showPTPanelButton() {
+  let theName=(presenterTracking ? "Stop PresenterTrack" : "Start PresenterTrack");
+  xapi.Command.UserInterface.Extensions.Panel.Save({ PanelId: 'panel_toggle_presentertrack' },
+                `<Extensions>
+  <Version>1.8</Version>
+  <Panel>
+    <Order>1</Order>
+    <PanelId>panel_toggle_presentertrack</PanelId>
+    <Type>InCall</Type>
+    <Icon>Camera</Icon>
+    <Color>#008094</Color>
+    <Name>`+theName+`</Name>
+    <ActivityType>Custom</ActivityType>
+  </Panel>
+</Extensions>`);
+}
+
+function hidePTPanelButton()
+{
+    xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'panel_toggle_presentertrack' });
+
+}
+
+// upon initialization, we need to hide or show this custom button (only shows in call though)
+if (PRESENTER_QA_MODE) {showPTPanelButton()} else {hidePTPanelButton()};
+
 
 function handleOverrideWidget(event)
 {
@@ -1188,7 +1372,36 @@ function onInitialCallTimerExpired() {
   console.log('onInitialCallTimerExpired');
   allowCameraSwitching = true;
   if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Activate').catch(handleError);
+}
 
+function startCompositionTimer() {
+  if (qaCompositionTimer == null) {
+    presenterQAKeepComposition=true;
+    qaCompositionTimer = setTimeout(onCompositionTimerExpired,PRESENTER_QA_KEEP_COMPOSITION_TIME )
+  }
+}
+
+function stopCompositionTimer() {
+  if (qaCompositionTimer != null) {
+    clearTimeout(qaCompositionTimer);
+    qaCompositionTimer = null;
+  }
+}
+
+function restartCompositionTimer() {
+  stopCompositionTimer();
+  startCompositionTimer();
+}
+
+function onCompositionTimerExpired() {
+  presenterQAKeepComposition=false;
+  if (PRESENTER_QA_MODE && presenterTracking) {
+    if (!PRESENTER_QA_AUDIENCE_MIC_IDS.includes(lastActiveHighInput)) {
+      // restore single presentertrackview because the person still speaking
+      // is not an audience member and the timer has expired (could also be due to silence)
+      recallFullPresenter();
+    }
+  }
 }
 
 function startNewSpeakerTimer() {
@@ -1287,7 +1500,29 @@ function init() {
     // register to receive events when someone manually turns on full screen mode
     // so we can keep the custom toggle button in the right state if also in self view
     xapi.Status.Video.Selfview.FullscreenMode.on(evalFullScreenEvent);
-    
+
+    // register to keep track of when PresenterTrack is active or not
+    xapi.Status.Cameras.PresenterTrack.Status.on(value => {
+      console.log('Received PT status as: ',value)
+      if (value==='Follow' || value==='Persistent') { 
+        presenterTracking=true;
+        // When composing the standard PresenterTrack selection button in the camera control is missing
+        // so we show a custom panel button to let users turn it on/off
+        if (PRESENTER_QA_MODE) { 
+          showPTPanelButton();
+          recallFullPresenter();
+        }
+        
+
+      }
+      else{
+        presenterTracking=false;
+        // When composing the standard PresenterTrack selection button in the camera control is missing
+        // so we show a custom panel button to let users turn it on/off
+        if (PRESENTER_QA_MODE) showPTPanelButton();
+      }
+    });
+      
     // first check to see if the room is supposed to be in combined mode as per permanent storage
     if (js_roomCombined){
       console.warn(`Room is configured in joined mode upon init, setting properly....`)
