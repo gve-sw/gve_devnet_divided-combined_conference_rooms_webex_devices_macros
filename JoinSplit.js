@@ -506,6 +506,11 @@ xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
   xapi.config.set('Video Output Connector 3 MonitorRole', 'Auto')
     .catch((error) => { console.error("69"+error); });
     // Secondary Codec - Monitor 3 role must be set for THIRD
+
+  //TODO: put command that would mirror Display 1 and 2 if they only have one screen and are using a direct tie line to
+  // secondary instead of a splitter on HDMI outputs 1 and 2
+
+
 }
 
 function setSecondaryDefaultConfig() {
@@ -648,6 +653,8 @@ xapi.config.set('Video DefaultMainSource', '1')
 
 // VIDEO OUTPUT SECTION
 // THESE SHOULD NOT BE CONFIGURED BY THE INSTALLER
+// TODO: for customers with a different output for tieline, need to make the connector ID a constant that
+// they can configure
   xapi.config.set('Video Output Connector 3 MonitorRole', 'Third')
     .catch((error) => { console.error("82"+error); });
   xapi.config.set('Video Output Connector 3 Resolution', 'Auto')
@@ -985,6 +992,8 @@ function primaryCombinedMode()
     .catch((error) => { console.error(error); });
   xapi.config.set('Conference FarEndControl Mode', 'Off')
     .catch((error) => { console.error("32"+error); });
+//TODO: put command that would mirror Display 1 and 2 if they only have one screen and are using a direct tie line to
+// secondary instead of a splitter on HDMI outputs 1 and 2
 
   xapi.command('Video Matrix Reset').catch((error) => { console.error(error); }); 
 
@@ -1068,29 +1077,21 @@ async function secondaryStandaloneMode()
  JoinSplit_secondary_settings=await GMM.read.global('JoinSplit_secondary_settings').catch(async e=>{
   console.log("No JoinSplit_secondary_settings global detected.")
   return JoinSplit_secondary_settings;
- })
+ });
+ 
  if (JoinSplit_secondary_settings.UltrasoundMax>=0) {
-  xapi.Config.Audio.Ultrasound.MaxVolume.set(JoinSplit_secondary_settings.UltrasoundMax);
+  xapi.Config.Audio.Ultrasound.MaxVolume.set(JoinSplit_secondary_settings.UltrasoundMax); }
+
  if (JoinSplit_secondary_settings.WakeupOnMotionDetection != '') {
     xapi.config.set('Standby WakeupOnMotionDetection', JoinSplit_secondary_settings.WakeupOnMotionDetection)
     .catch((error) => { console.error(error); });
   }
+
  if (JoinSplit_secondary_settings.StandbyControl != '') {
   xapi.config.set('Standby Control', JoinSplit_secondary_settings.StandbyControl)
   .catch((error) => { console.error(error); });
   }
 
-
-
- //Restore StandbyControl setting if previously stored
- let ssecondaryStandbyControl=await GMM.read.global('JoinSplit_secondaryStandbyControl').catch(async e=>{
-  console.log("No JoinSplit_secondaryStandbyControl global detected.")
-  return '';
-  })
-  if (ssecondaryStandbyControl != '') {
-      xapi.config.set('Standby Control', ssecondaryStandbyControl)
-      .catch((error) => { console.error(error); });
-  }
 
 
   xapi.command('Conference DoNotDisturb Deactivate')
@@ -1115,7 +1116,9 @@ async function secondaryCombinedMode()
     .catch((error) => { console.error("91"+error); });
   xapi.config.set('Audio Output Line 5 Mode', 'On')
     .catch((error) => { console.error(error); });
-    xapi.config.set('Audio Input HDMI 3 Mode', 'On')
+//TODO: if they use just one monitor and do a different mapping for video tieline, we need to make
+// ID of HDMIN input a configurable constant below
+  xapi.config.set('Audio Input HDMI 3 Mode', 'On')
     .catch((error) => { console.error("5"+error); });
   xapi.Command.Video.Selfview.Set({ Mode: 'Off' });
 
@@ -1147,6 +1150,8 @@ async function secondaryCombinedMode()
     .catch((error) => { console.error(error); });
   xapi.Config.Video.Monitors.set('Triple'); // TODO Enrico testing
   xapi.command('Video Matrix Reset').catch((error) => { console.error(error); }); // TODO Enrico testing
+  //TODO: if they use just one monitor and no splitters so the use another HDMI for tie line, we need to change the mappings 
+  // below to constants for the SourceIDs and Outputs. 
   xapi.command('Video Matrix Assign', { Output: 3, SourceID: 1 }).catch((error) => { console.error(error); });
   xapi.command('Video Matrix Assign', { Output: 1, SourceID: 3 }).catch((error) => { console.error(error); });
   xapi.command('Video Matrix Assign', { Output: 2, SourceID: 4 }).catch((error) => { console.error(error); });
