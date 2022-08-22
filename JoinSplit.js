@@ -40,6 +40,9 @@ const JS_PRIMARY=1, JS_SECONDARY=2, JS_NONE=0
 // For ROOM_ROLE fill in either JS_PRIMARY or JS_SECONDARY as the value.
 // For PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID leave the value at 3, unless you are using the SDI input for the video tie line 
 // from the Secondary to the Primary Codec, in which case you would enter a value of 6.
+// For PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT , set to true if you would like the codec to show the video input
+// from tieline from secondary codec on the right when composing the image and that matches the layout of your combined room. 
+// If you need to reverse this, set it to false. 
 // For OTHER_CODEC_IP and the USER and PWD fields, if you filled in ROOM_ROLE : JS_PRIMARY, then you would enter the IP address 
 // and admin account credentials for the Secondary Codec.  If you filled in ROOM_ROLE : JS_SECONDARY, then you would enter the 
 // IP address and admin account credentials for the Primary Codec.
@@ -47,6 +50,7 @@ const JS_PRIMARY=1, JS_SECONDARY=2, JS_NONE=0
 const JOIN_SPLIT_CONFIG = {
   ROOM_ROLE : JS_PRIMARY,
   PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID: 3,
+  PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT: true,
   OTHER_CODEC_IP : '10.0.0.100',
   OTHER_CODEC_USER : '',
   OTHER_CODEC_PWD : ''
@@ -508,8 +512,9 @@ xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
     // Secondary Codec - Monitor 3 role must be set for THIRD
 
   //TODO: put command that would mirror Display 1 and 2 if they only have one screen and are using a direct tie line to
-  // secondary instead of a splitter on HDMI outputs 1 and 2
-
+  // secondary instead of a splitter on HDMI outputs 1 and 2, as such: 
+  //xapi.Config.Video.Monitors.set('Single');
+  //xapi.Config.Video.Output.Connector[2].MonitorRole.set('First');  
 
 }
 
@@ -531,8 +536,9 @@ function setSecondaryDefaultConfig() {
     .catch((error) => { console.error("4"+error); });
     xapi.config.set('Audio Input HDMI 2 Mode', 'Off')
     .catch((error) => { console.error("5"+error); });
-  xapi.config.set('Audio Input HDMI 3 Mode', 'Off')
+  xapi.config.set('Audio Input HDMI 3 Mode', 'On')
     .catch((error) => { console.error("5"+error); });
+    // This allows us of USB Passthrough
 
 // SET MICROPHONES
 // MICROPHONES 1 THRU 8 ARE USER CONFIGURABLE
@@ -1009,7 +1015,7 @@ function primaryCombinedMode()
   }
 
     //Tell the codec in the SECONDARY room to go to combined mode
-    otherCodec.command('COMBINED').post()
+    //otherCodec.command('COMBINED').post()
 
     //Alert local macros that need to know that the room is joining, mostly the switcher macro
     let gmm_status={

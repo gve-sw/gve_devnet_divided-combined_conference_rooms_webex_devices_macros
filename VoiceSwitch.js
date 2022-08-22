@@ -49,21 +49,21 @@ import { GMM } from './GMM_Lib'
 */
 
 
-// THIS MACRO IS USED FOR TWO USE CASES:
-// 1. IT MUST BE INSTALLED ON THE PRIMARY CODEC IN A DIVIDED-COMBINED ROOM. SET "const SWITCHER-ROLE=SWITCHER_MAIN" BELOW.
-// 2. IT CAN BE INSTALLED ON THE SECONDARY CODEC IF YOU PLAN TO DO MICROPHONE-BASED CAMERA SWITCHING IN THAT ROOM.  In that case, set 
-// "const SWITCHER_ROLE=SWITCHER_AUX"
+// The SWITCHER_MAIN constant must be set to SWITCHER_MAIN on both codecs if using in a DIVIDED-COMBINED ROOM
+// If you are using the VoiceSwitch module on it's own to and have 2 codecs in the room for handling 2 QuadCams, 
+// install this macro on both devices and set  SWITCHER_ROLE=SWITCHER_AUX on the codec controlling the second QuadCam. 
 const SWITCHER_MAIN=1, SWITCHER_AUX=2
 const SWITCHER_ROLE=SWITCHER_MAIN
 
 // THIS SECTION IS USED **ONLY** IF YOU HAVE TWO QUAD CAMERAS - AND THEREFORE A CODEC PRO AND AN AUX CODEC PLUS - IN THE **SAME ROOM**.
+// AND YOU ARE NOT IN A JOIN/SPLIT SCENARIO. 
 // IN THAT CASE YOU WOULD INSTALL THIS MACRO BOTH ON THE CODEC PRO AND THE AUX CODEC PLUS.
 // FILL IN THE IP ADDRESS AND ADMIN USER ACCOUNTS FOR THE COUNTERPART CODEC.  IN OTHER WORDS, ON THE CODEC PRO, ENTER IN THE IP ADDRESS
 // AND AUTHENTICATION FOR THE AUX CODEC PLUS.
 // ON THE OTHER HAND, ON THE AUX CODEC PLUS, ENTER IN THE IP ADDRESS
 // AND AUTHENTICATION FOR THE CODEC PRO.
 // INSTRUCTIONS FOR SETTING UP ADMIN ACCOUNTS ARE IN THE "Installation Instructions" DOCUMENT.
-// NOTE: if there is no AUX CODEC PLUS you must set the value of OTHER_SWITCHER_CODEC_IP to '' (BLANK) AND LEAVE THE USER AND PASSWORD BLANK.
+// NOTE: if there is no AUX CODEC PLUS or you are using it in a DIVIDED-COMBINED ROOM  you must set the value of OTHER_SWITCHER_CODEC_IP to '' (BLANK) AND LEAVE THE USER AND PASSWORD BLANK.
 const OTHER_SWITCHER_CODEC_IP='10.0.0.10'
 const OTHER_SWITCHER_CODEC_USER=''
 const OTHER_SWITCHER_CODEC_PWD=''
@@ -310,10 +310,13 @@ const JS_PRIMARY=1, JS_SECONDARY=2, JS_NONE=0
 var JOIN_SPLIT_CONFIG = {
   ROOM_ROLE : JS_NONE,
   PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID: 0,
+  PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT: true,
   OTHER_CODEC_IP : '',
   OTHER_CODEC_USER : '',
   OTHER_CODEC_PWD : ''
 }
+
+var otherSwitcherCodec='';
 
 var js_roomCombined=false;
 
@@ -345,10 +348,10 @@ async function validate_initial() {
           //so we have to set up the correct connection to the other codec
           //and validate the settings appropriately
           validate_joinsplit_compatible_config(JOIN_SPLIT_CONFIG.ROOM_ROLE);
-          var otherSwitcherCodec = new GMM.Connect.IP(JOIN_SPLIT_CONFIG.OTHER_CODEC_USER, JOIN_SPLIT_CONFIG.OTHER_CODEC_PWD, JOIN_SPLIT_CONFIG.OTHER_CODEC_IP)
+          otherSwitcherCodec = new GMM.Connect.IP(JOIN_SPLIT_CONFIG.OTHER_CODEC_USER, JOIN_SPLIT_CONFIG.OTHER_CODEC_PWD, JOIN_SPLIT_CONFIG.OTHER_CODEC_IP)
       }
       else if (OTHER_SWITCHER_CODEC_IP!='') {
-          var otherSwitcherCodec = new GMM.Connect.IP(OTHER_SWITCHER_CODEC_USER, OTHER_SWITCHER_CODEC_PWD, OTHER_SWITCHER_CODEC_IP)
+          otherSwitcherCodec = new GMM.Connect.IP(OTHER_SWITCHER_CODEC_USER, OTHER_SWITCHER_CODEC_PWD, OTHER_SWITCHER_CODEC_IP)
       }
 }
 
@@ -746,10 +749,12 @@ async function makeCameraSwitch(input, average) {
   // we want to use for switching camera input
   var selectedSource=MAP_CAMERA_SOURCES[MICROPHONE_CONNECTORS.indexOf(input)]
 
-  if (PRESENTER_QA_MODE && presenterTracking) {
+  if (presenterTracking) {
     // if we have selected Presenter Q&A mode and the codec is currently in presenterTrack mode, invoke
     // that specific camera switching logic contained in presenterQASwitch()
-    presenterQASwitch(input, selectedSource);
+    if (PRESENTER_QA_MODE) presenterQASwitch(input, selectedSource);
+    // if the codec is in presentertracking but not in PRESENTER_QA_MODE , simply ignore the request to switch
+    // cameras since we need to keep sending the presenterTrack camera. 
   }
   else
   {
@@ -947,10 +952,11 @@ function averageArray(arrayIn) {
 async function recallSideBySideMode() {
   // only invoke SideBySideMode if not in presenter QA mode and not presentertrack is currently not active
   // because Presenter QA mode has it's own way of composing side by side. 
-  if (PRESENTER_QA_MODE && presenterTracking ) {
-    // If in presentertrack mode and we go to silence, we need to restart the composition timer
+  if (presenterTracking ) {
+    // If in PRESENTER_QA_MODE mode and we go to silence, we need to restart the composition timer
     // to remove composition (if it was there) only after the configured time has passed.
-    restartCompositionTimer();
+    if (PRESENTER_QA_MODE) restartCompositionTimer();
+    // even if not in PRESENTER_QA_MODE , if presenterTrack is turned on, we do not want to show anyd side by side mode!
   }
   else 
   {
@@ -1124,6 +1130,8 @@ GMM.Event.Receiver.on(event => {
                     if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
                         overviewShowDouble=false;
                         OVERVIEW_DOUBLE_SOURCE_IDS = [1,1]; // should not be needed, but useful if someone overviewdouble is enabled somehow
+                        //turn off side by side at this point in case it stayed turned on!!!
+                        recallSideBySideMode();
                     }
                     else if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_SECONDARY) {
                       js_roomCombined=false; //need to set this here because in secondary we do not use permanent memory for this status
@@ -1135,25 +1143,21 @@ GMM.Event.Receiver.on(event => {
                     AUX_CODEC_IP=JOIN_SPLIT_CONFIG.OTHER_CODEC_IP
                     AUX_CODEC={ enable: (AUX_CODEC_IP!='') , online: false};
                     if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
-                        overviewShowDouble=true;
+                      overviewShowDouble=true;
+                      if (JOIN_SPLIT_CONFIG.PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT) {
                         OVERVIEW_DOUBLE_SOURCE_IDS = [V1,JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID];
-                        main_init(); 
+                      } 
+                      else 
+                      {
+                        OVERVIEW_DOUBLE_SOURCE_IDS = [JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID,V1];
+                      }                        
+                      main_init(); 
                     }
                     else if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_SECONDARY) {
                         // we first need to stop switching if it was enabled
                         js_roomCombined=true; //need to set this here because in secondary we do not use permanent memory for this status
                         stopAutomation();
-                        // then we need to turn on vuMeters just to make sure the mute LEDs show
-                          // start VuMeter monitoring
-                        console.log("Turning on VuMeter monitoring...")
-                        for (var i in MICROPHONE_CONNECTORS) {
-                          xapi.command('Audio VuMeter Start', {
-                                ConnectorId: MICROPHONE_CONNECTORS[i],
-                                ConnectorType: 'Microphone',
-                                IntervalMs: 500,
-                                Source: 'AfterAEC'
-                          }); 
-                        }
+
                         //aux_init(); //if we call this, it will mess up setup that JoinSplit did for secondary
                     }
                     break;
@@ -1172,7 +1176,7 @@ GMM.Event.Receiver.on(event => {
           else
           {
                 switch (event.App) { //Based on the App (Macro Name), I'll run some code
-                case 'voice_activated_switching':
+                case 'VoiceSwitch':
                   if (event.Type == 'Error') {
                     console.error(event)
                   } else {
@@ -1195,7 +1199,25 @@ GMM.Event.Receiver.on(event => {
                       case 'automatic_mode':
                         aux_handleAutomaticMode();
                         break;
-                      default:
+                      case 'CALL_CONNECTED':
+                        // then we need to turn on vuMeters just to make sure the mute LEDs show
+                        // start VuMeter monitoring
+                        console.log("Turning on VuMeter monitoring...")
+                        for (var i in MICROPHONE_CONNECTORS) {
+                          xapi.command('Audio VuMeter Start', {
+                                ConnectorId: MICROPHONE_CONNECTORS[i],
+                                ConnectorType: 'Microphone',
+                                IntervalMs: 500,
+                                Source: 'AfterAEC'
+                          }); 
+                        }
+                        break;
+                        case 'CALL_DISCONNECTED':
+                          // Turn vuMeters back off
+                          console.log("Stopping all VuMeters...");
+                          xapi.Command.Audio.VuMeter.StopAll({ });
+                          break;                      
+                        default:
                         break;
                     }
                   }
@@ -1482,6 +1504,10 @@ function init() {
         startAutomation();
         startInitialCallTimer();
       }
+      if (js_roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY))
+      { 
+          otherSwitcherCodec.status('CALL_CONNECTED').post();
+      }
     });
 
     // register handler for Call Disconnect
@@ -1490,6 +1516,10 @@ function init() {
         console.log("Turning off Self View....");
         xapi.Command.Video.Selfview.Set({ Mode: 'off'});
         stopAutomation();
+      }
+      if (js_roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)) 
+      {
+        otherSwitcherCodec.status('CALL_DISCONNECTED').post();
       }
     });
 
@@ -1530,7 +1560,13 @@ function init() {
       AUX_CODEC={ enable: (AUX_CODEC_IP!='') , online: false};
       if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
           overviewShowDouble=true;
-          OVERVIEW_DOUBLE_SOURCE_IDS = [V1,JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID];
+          if (JOIN_SPLIT_CONFIG.PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT) {
+              OVERVIEW_DOUBLE_SOURCE_IDS = [V1,JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID];
+            } 
+            else 
+            {
+              OVERVIEW_DOUBLE_SOURCE_IDS = [JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID,V1];
+            }
           main_init(); 
       }
       else if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_SECONDARY) {
