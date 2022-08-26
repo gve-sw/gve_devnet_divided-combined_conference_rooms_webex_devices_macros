@@ -154,7 +154,7 @@ const MAIN_CODEC_QUADCAM_SOURCE_ID=1;
 const MAP_PTZ_CAMERA_VIDEO_SOURCE_ID = { '2':6, '3':2, '4':4 };
 
 // This next line hides the mid-call controls “Lock meeting” and “Record”.  The reason for this is so that the
-// “Camera Control” button can be seen.  If you prefer to have the mid-call controls showing, change the value of this from “Hidden” to “Auto”
+// “Camera Test button can be seen.  If you prefer to have the mid-call controls showing, change the value of this from “Hidden” to “Auto”
 xapi.Config.UserInterface.Features.Call.MidCallControls.set("Hidden");
 
 /*
@@ -451,11 +451,11 @@ async function getPresetCamera(prID) {
 
 function evalFullScreen(value) {
 	if (value=='On') {
-		xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_FS_selfview', Value: 'on'});
+		xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_FS_selfview', Value: 'on'}).catch(handleMissingWigetError);
 	}
 	else
 	{
-		xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_FS_selfview' , Value: 'off'});
+		xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_FS_selfview' , Value: 'off'}).catch(handleMissingWigetError);
 	}
 }
 
@@ -470,7 +470,7 @@ function evalFullScreenEvent(value)
     }
     else
     {
-      xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_FS_selfview', Value: 'off'});
+      xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_FS_selfview', Value: 'off'}).catch(handleMissingWigetError);
     }
  }
 }
@@ -482,7 +482,7 @@ function evalSelfView(value) {
     }
     else
     {
-      xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_FS_selfview', Value: 'off'});
+      xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_FS_selfview', Value: 'off'}).catch(handleMissingWigetError);
     }
   }
 }
@@ -501,86 +501,6 @@ function main_init() {
     AUX_CODEC_IP = OTHER_SWITCHER_CODEC_IP;
     AUX_CODEC={ enable: (AUX_CODEC_IP!='') , online: false};
 
-  // add custom control panel for turning onn/off automatic mode
-  xapi.Command.UserInterface.Extensions.Panel.Save({ PanelId: 'panel_manual_override' },
-        `<Extensions>
-          <Version>1.8</Version>
-          <Panel>
-            <Order>1</Order>
-            <PanelId>panel_manual_override</PanelId>
-            <Origin>local</Origin>
-            <Type>Statusbar</Type>
-            <Icon>Camera</Icon>
-            <Color>#07C1E4</Color>
-            <Name>Camera Control</Name>
-            <ActivityType>Custom</ActivityType>
-            <Page>
-              <Name>Camera Control</Name>
-              <Row>
-                <Name/>
-                <Widget>
-                  <WidgetId>widget_9</WidgetId>
-                  <Name>Select manual or automatic control of Quad Cameras</Name>
-                  <Type>Text</Type>
-                  <Options>size=4;fontSize=normal;align=center</Options>
-                </Widget>
-              </Row>
-              <Row>
-                <Name/>
-                <Widget>
-                  <WidgetId>widget_8</WidgetId>
-                  <Name>Manual</Name>
-                  <Type>Text</Type>
-                  <Options>size=1;fontSize=normal;align=center</Options>
-                </Widget>
-                <Widget>
-                  <WidgetId>widget_override</WidgetId>
-                  <Type>ToggleButton</Type>
-                  <Options>size=1</Options>
-                </Widget>
-                <Widget>
-                  <WidgetId>widget_6</WidgetId>
-                  <Name>Automatic</Name>
-                  <Type>Text</Type>
-                  <Options>size=2;fontSize=normal;align=center</Options>
-                </Widget>
-              </Row>
-              <Row>
-                <Name/>
-                <Widget>
-                  <WidgetId>widget_10</WidgetId>
-                  <Name>For testing while not in call, turn on fullscreen Selfview</Name>
-                  <Type>Text</Type>
-                  <Options>size=4;fontSize=normal;align=center</Options>
-                </Widget>
-              </Row>
-              <Row>
-                <Name/>
-                <Widget>
-                  <WidgetId>widget_14</WidgetId>
-                  <Name>Off</Name>
-                  <Type>Text</Type>
-                  <Options>size=1;fontSize=normal;align=center</Options>
-                </Widget>
-                <Widget>
-                  <WidgetId>widget_FS_selfview</WidgetId>
-                  <Type>ToggleButton</Type>
-                  <Options>size=1</Options>
-                </Widget>
-                <Widget>
-                  <WidgetId>widget_12</WidgetId>
-                  <Name>Selfview</Name>
-                  <Type>Text</Type>
-                  <Options>size=2;fontSize=normal;align=center</Options>
-                </Widget>
-              </Row>
-              <PageId>panel_manual_override</PageId>
-              <Options/>
-            </Page>
-          </Panel>
-        </Extensions>
-        `);
-
   // Stop any VuMeters that might have been left from a previous macro run with a different MICROPHONE_CONNECTORS constant
   // to prevent errors due to unhandled vuMeter events.
   xapi.Command.Audio.VuMeter.StopAll({ });
@@ -588,8 +508,7 @@ function main_init() {
   //  set self-view toggle on custom panel depending on Codec status that might have been set manually
   xapi.Status.Video.Selfview.Mode.get().then(evalSelfView);
 
-  // next, set Automatic mode toggle switch on custom panel off since the macro starts that way
-  xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_override', Value: 'off'});
+
   //TODO: based on GMM variables, if set for JoinSplit and in Join (Combine) mode, trigger the right setup for that! 
 }
 
@@ -662,8 +581,8 @@ function startAutomation() {
           Source: 'AfterAEC'
     });
   }
-  // set toggle button on custom panel to reflect that automation is turned on.
-  xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_override', Value: 'on'});
+  // if available, set toggle button on custom panel to reflect that automation is turned on.
+  xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_override', Value: 'on'}).catch(handleMissingWigetError);
 }
 
 function stopAutomation() {
@@ -679,7 +598,7 @@ function stopAutomation() {
          micHandler= () => void 0;
 
          // set toggle button on custom panel to reflect that automation is turned off.
-         xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_override', Value: 'off'});
+         xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_override', Value: 'off'}).catch(handleMissingWigetError);
 
 }
 
@@ -1065,10 +984,10 @@ function handleOverrideWidget(event)
   if (SWITCHER_ROLE===SWITCHER_MAIN) {
          if (event.WidgetId === 'widget_override')
          {
-            console.log("Camera Control button selected.....")
+            console.log("Camera Test button selected.....")
             if (event.Value === 'off') {
 
-                    console.log("Camera Control is set to Manual...");
+                    console.log("Camera Test is set to Manual...");
                     console.log("Stopping automation...")
                     stopAutomation();
                 }
@@ -1076,7 +995,7 @@ function handleOverrideWidget(event)
                {
 
                   // start VuMeter monitoring
-                  console.log("Camera Control is set to Automatic...");
+                  console.log("Camera Test is set to Automatic...");
                   console.log("Starting automation...")
                   startAutomation();
                }
@@ -1111,6 +1030,94 @@ function handleError(error) {
   console.log(error);
 }
 
+function handleMissingWigetError(error) {
+  console.log('Trying to set widget that is not being shown...');
+}
+
+function addCustomManualOverridePanel() {
+
+  // add custom control panel for turning onn/off automatic mode
+  xapi.Command.UserInterface.Extensions.Panel.Save({ PanelId: 'panel_manual_override' },
+  `<Extensions>
+    <Version>1.8</Version>
+    <Panel>
+      <Order>1</Order>
+      <PanelId>panel_manual_override</PanelId>
+      <Origin>local</Origin>
+      <Type>Statusbar</Type>
+      <Icon>Camera</Icon>
+      <Color>#07C1E4</Color>
+      <Name>Camera Test</Name>
+      <ActivityType>Custom</ActivityType>
+      <Page>
+        <Name>Camera Test</Name>
+        <Row>
+          <Name/>
+          <Widget>
+            <WidgetId>widget_9</WidgetId>
+            <Name>Select manual or automatic control of Quad Cameras</Name>
+            <Type>Text</Type>
+            <Options>size=4;fontSize=normal;align=center</Options>
+          </Widget>
+        </Row>
+        <Row>
+          <Name/>
+          <Widget>
+            <WidgetId>widget_8</WidgetId>
+            <Name>Manual</Name>
+            <Type>Text</Type>
+            <Options>size=1;fontSize=normal;align=center</Options>
+          </Widget>
+          <Widget>
+            <WidgetId>widget_override</WidgetId>
+            <Type>ToggleButton</Type>
+            <Options>size=1</Options>
+          </Widget>
+          <Widget>
+            <WidgetId>widget_6</WidgetId>
+            <Name>Automatic</Name>
+            <Type>Text</Type>
+            <Options>size=2;fontSize=normal;align=center</Options>
+          </Widget>
+        </Row>
+        <Row>
+          <Name/>
+          <Widget>
+            <WidgetId>widget_10</WidgetId>
+            <Name>For testing while not in call, turn on fullscreen Selfview</Name>
+            <Type>Text</Type>
+            <Options>size=4;fontSize=normal;align=center</Options>
+          </Widget>
+        </Row>
+        <Row>
+          <Name/>
+          <Widget>
+            <WidgetId>widget_14</WidgetId>
+            <Name>Off</Name>
+            <Type>Text</Type>
+            <Options>size=1;fontSize=normal;align=center</Options>
+          </Widget>
+          <Widget>
+            <WidgetId>widget_FS_selfview</WidgetId>
+            <Type>ToggleButton</Type>
+            <Options>size=1</Options>
+          </Widget>
+          <Widget>
+            <WidgetId>widget_12</WidgetId>
+            <Name>Selfview</Name>
+            <Type>Text</Type>
+            <Options>size=2;fontSize=normal;align=center</Options>
+          </Widget>
+        </Row>
+        <PageId>panel_manual_override</PageId>
+        <Options/>
+      </Page>
+    </Panel>
+  </Extensions>
+  `);
+
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////
 // INTER-MACRO MESSAGE HANDLING
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -1127,6 +1134,8 @@ GMM.Event.Receiver.on(event => {
                     console.warn(`Room switching to split mode`)
                     AUX_CODEC_IP=''
                     AUX_CODEC={ enable: false , online: false};
+                    addCustomManualOverridePanel();
+
                     if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
                         overviewShowDouble=false;
                         OVERVIEW_DOUBLE_SOURCE_IDS = [1,1]; // should not be needed, but useful if someone overviewdouble is enabled somehow
@@ -1142,6 +1151,8 @@ GMM.Event.Receiver.on(event => {
                     console.warn(`Room switching to joined mode`)
                     AUX_CODEC_IP=JOIN_SPLIT_CONFIG.OTHER_CODEC_IP
                     AUX_CODEC={ enable: (AUX_CODEC_IP!='') , online: false};
+                    //Remove custom panel for turning on and off automation because it causes unexpected behaviors in combined mode
+                    xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'panel_manual_override' });
                     if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
                       overviewShowDouble=true;
                       if (JOIN_SPLIT_CONFIG.PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT) {
@@ -1578,6 +1589,9 @@ function init() {
     // not in combined mode or not using JoinSplit macro, just check for switcher role and init accordingly
     if (SWITCHER_ROLE===SWITCHER_MAIN) {
           main_init();
+          addCustomManualOverridePanel();
+          // next, set Automatic mode toggle switch on custom panel off since the macro starts that way
+          xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_override', Value: 'off'});
       }
       else {
         aux_init();
