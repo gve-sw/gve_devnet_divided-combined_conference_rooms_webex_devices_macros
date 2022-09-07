@@ -507,7 +507,7 @@ xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
 
 // VIDEO OUTPUT SECTION
 // THESE SHOULD NOT BE CONFIGURED BY THE INSTALLER
-  xapi.config.set('Video Output Connector 3 MonitorRole', 'Auto')
+  xapi.config.set('Video Output Connector 3 MonitorRole', 'Auto') 
     .catch((error) => { console.error("69"+error); });
     // Secondary Codec - Monitor 3 role must be set for THIRD
 
@@ -1103,10 +1103,8 @@ async function secondaryStandaloneMode()
   xapi.command('Conference DoNotDisturb Deactivate')
     .catch((error) => { console.error(error); });
   xapi.Config.Video.Monitors.set(SECONDARY_SPLIT_MODE_VIDEO_MONITORS); 
-  xapi.command('Video Matrix Reset')
-    .catch((error) => { console.error(error); }); 
-  xapi.config.set('UserInterface OSD Mode', 'Auto')
-    .catch((error) => { console.error("90"+error); });
+  xapi.command('Video Matrix Reset').catch((error) => { console.error(error); }); 
+  xapi.config.set('UserInterface OSD Mode', 'Auto').catch((error) => { console.error("90"+error); });
   let gmm_status={
     'Action': 'ROOMS_SPLIT',
     'roomRole': JOIN_SPLIT_CONFIG.ROOM_ROLE  //this is just a placeholder for any other info we might want to send

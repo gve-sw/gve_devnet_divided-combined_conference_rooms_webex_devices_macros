@@ -434,6 +434,8 @@ let presenterTracking=false;
 let presenterQAKeepComposition=false;
 let qaCompositionTimer=null;
 
+let usb_mode = false;
+
 /////////////////////////////////////////////////////////////////////////////////////////
 // UTILITIES
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -1177,6 +1179,42 @@ GMM.Event.Receiver.on(event => {
                 }
               }
               break;
+            case 'USB_Mode_Version_3':
+              if (event.Type == 'Error') {
+                console.error(event)
+              } else {
+                switch (event.Value) {
+                  case 'EnteringWebexMode':
+                    console.warn(`You are entering Webex Mode`)
+                    //Run code here when Default Mode starts to configure
+                    break;
+                  case 'WebexModeStarted':
+                    console.warn(`System is in Default Mode`)
+                    stopAutomation();
+                    usb_mode= false;
+                    if (js_roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)) 
+                    {
+                      otherSwitcherCodec.status('CALL_DISCONNECTED').post();
+                    }
+                    break;
+                  case 'enteringUSBMode':
+                    console.warn(`You are entering USB Mode`)
+                    //Run code here when USB Mode starts to configure
+                    break;
+                  case 'USBModeStarted':
+                    console.warn(`System is in Default Mode`)
+                    startAutomation();
+                    usb_mode= true;
+                    if (js_roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY))
+                    { 
+                        otherSwitcherCodec.status('CALL_CONNECTED').post();
+                    }
+                    break;
+                  default:
+                    break;
+                }
+              }
+              break;
             default:
               console.debug({
                 Message: `Received Message from ${event.App} and was not processed`
@@ -1523,7 +1561,7 @@ function init() {
 
     // register handler for Call Disconnect
     xapi.Event.CallDisconnect.on(async () => {
-      if (SWITCHER_ROLE===SWITCHER_MAIN) {
+      if (SWITCHER_ROLE===SWITCHER_MAIN && !usb_mode) {
         console.log("Turning off Self View....");
         xapi.Command.Video.Selfview.Set({ Mode: 'off'});
         stopAutomation();
