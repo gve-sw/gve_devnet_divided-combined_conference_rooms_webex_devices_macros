@@ -21,6 +21,11 @@ For configuration setup and further hardware setup instructions, refer to the [I
 
 Install GMM_Lib.js, JoinSplit.js and VoiceSwitch.js on each codec (primary and secondary)  
 
+If you also have installed the USB Mode Version 3 macro, you need to edit it and set the `matrix_Camera_Mode` constant to `true`  
+
+NOTE: The macro modules contained in this repository and the USB Mode Macro Version 3 use the same macro library contained in GMM_Lib.js , if 
+you already installed it for the USB Mode Macro, there is no need to install it again.  
+
 Here is a summary of their roles as modules of this Divided-Combined functionality: 
 
 ### GMM_Lib.js  

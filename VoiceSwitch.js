@@ -294,6 +294,9 @@ let has_SpeakerTrack= MAP_CAMERA_SOURCES.indexOf(SP) != -1 ||
                         MAP_CAMERA_SOURCES.indexOf(V1) != -1;
 
 
+const localCallout = new GMM.Connect.Local(module.name.replace('./', ''))
+
+
 /////////////////////////////////////////////////////////////////////////////////////////
 // VARIABLES
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -837,6 +840,15 @@ function setComposedQAVideoSource(connectorDict) {
   if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
   console.log("In setComposedQAVideoSource() switching to input with SetMainVideoSource with dict: ", connectorDict  )
   xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+  //TODO: validate that in this context connectorDict["ConnectorId"] is the array of connectors being passed in
+  //let connectorDict={ ConnectorId : [presenterSource,selectedSource]};
+  const payload = { EditMatrixOutput: { sources: connectorDict["ConnectorId"] } };
+
+  //You will need to change this GMM object name to match yours
+  setTimeout(function(){
+    //You will need to change this GMM object name to the one you instantiated
+    localCallout.command(payload).post()
+  }, 250) //250ms delay to allow the main source to resolve first
 
   if ((MAP_CAMERA_SOURCES.indexOf(SP)==-1) && (connectorDict.ConnectorId[1]==MAIN_CODEC_QUADCAM_SOURCE_ID) ) {
     // if the composition is using a QuadCam configured on the codec (no SpeakerTrack camera allowed) 
@@ -891,6 +903,16 @@ async function recallSideBySideMode() {
           connectorDict["ConnectorId"]=OVERVIEW_DOUBLE_SOURCE_IDS;
           console.log("Trying to use this for connector dict in recallSideBySideMode(): ", connectorDict  )
           xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+          const payload = { EditMatrixOutput: { sources: OVERVIEW_DOUBLE_SOURCE_IDS } };
+
+          //You will need to change this GMM object name to match yours
+          setTimeout(function(){
+
+              //You will need to change this GMM object name to the one you instantiated
+              localCallout.command(payload).post()
+
+            }, 250) //250ms delay to allow the main source to resolve first
+
           if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
           xapi.command('Camera Preset Activate', { PresetId: 30 }).catch(handleError);
       }
@@ -1124,103 +1146,101 @@ function addCustomManualOverridePanel() {
 // INTER-MACRO MESSAGE HANDLING
 /////////////////////////////////////////////////////////////////////////////////////////
 GMM.Event.Receiver.on(event => {
-
+    const usb_mode_reg = /USB_Mode_Version_[0-9]*.*/gm
     if (event.Source.Id=='localhost') {
-          switch (event.App) { //Based on the App (Macro Name), I'll run some code
-            case 'JoinSplit':
+            if (event.App=='JoinSplit') {
               if (event.Type == 'Error') {
                 console.error(event)
               } else {
-                switch (event.Value.Action) {
-                  case 'ROOMS_SPLIT':
-                    console.warn(`Room switching to split mode`)
-                    AUX_CODEC_IP=''
-                    AUX_CODEC={ enable: false , online: false};
-                    addCustomManualOverridePanel();
+                  switch (event.Value.Action) {
+                      case 'ROOMS_SPLIT':
+                        console.warn(`Room switching to split mode`)
+                        AUX_CODEC_IP=''
+                        AUX_CODEC={ enable: false , online: false};
+                        addCustomManualOverridePanel();
 
-                    if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
-                        overviewShowDouble=false;
-                        OVERVIEW_DOUBLE_SOURCE_IDS = [1,1]; // should not be needed, but useful if someone overviewdouble is enabled somehow
-                        //turn off side by side at this point in case it stayed turned on!!!
-                        recallSideBySideMode();
-                    }
-                    else if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_SECONDARY) {
-                      js_roomCombined=false; //need to set this here because in secondary we do not use permanent memory for this status
-                        main_init(); // main_init() also stops all vuMeters after we turned it on when joined in secondary room
-                    }
-                    break;
-                  case 'ROOMS_JOINED':
-                    console.warn(`Room switching to joined mode`)
-                    AUX_CODEC_IP=JOIN_SPLIT_CONFIG.OTHER_CODEC_IP
-                    AUX_CODEC={ enable: (AUX_CODEC_IP!='') , online: false};
-                    //Remove custom panel for turning on and off automation because it causes unexpected behaviors in combined mode
-                    xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'panel_manual_override' });
-                    if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
-                      overviewShowDouble=true;
-                      if (JOIN_SPLIT_CONFIG.PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT) {
-                        OVERVIEW_DOUBLE_SOURCE_IDS = [V1,JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID];
-                      } 
-                      else 
+                        if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
+                            overviewShowDouble=false;
+                            OVERVIEW_DOUBLE_SOURCE_IDS = [1,1]; // should not be needed, but useful if someone overviewdouble is enabled somehow
+                            //turn off side by side at this point in case it stayed turned on!!!
+                            recallSideBySideMode();
+                        }
+                        else if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_SECONDARY) {
+                          js_roomCombined=false; //need to set this here because in secondary we do not use permanent memory for this status
+                            main_init(); // main_init() also stops all vuMeters after we turned it on when joined in secondary room
+                        }
+                        break;
+                      case 'ROOMS_JOINED':
+                        console.warn(`Room switching to joined mode`)
+                        AUX_CODEC_IP=JOIN_SPLIT_CONFIG.OTHER_CODEC_IP
+                        AUX_CODEC={ enable: (AUX_CODEC_IP!='') , online: false};
+                        //Remove custom panel for turning on and off automation because it causes unexpected behaviors in combined mode
+                        xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'panel_manual_override' });
+                        if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
+                          overviewShowDouble=true;
+                          if (JOIN_SPLIT_CONFIG.PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT) {
+                            OVERVIEW_DOUBLE_SOURCE_IDS = [V1,JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID];
+                          } 
+                          else 
+                          {
+                            OVERVIEW_DOUBLE_SOURCE_IDS = [JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID,V1];
+                          }                        
+                          main_init(); 
+                        }
+                        else if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_SECONDARY) {
+                            // we first need to stop switching if it was enabled
+                            js_roomCombined=true; //need to set this here because in secondary we do not use permanent memory for this status
+                            stopAutomation();
+
+                            //aux_init(); //if we call this, it will mess up setup that JoinSplit did for secondary
+                        }
+                        break;
+                      default:
+                        break;
+                  }
+              }
+            }
+            else if (usb_mode_reg.test(event.App)) {
+              if (event.Type == 'Error') {
+                console.error(event)
+              } else {
+                  switch (event.Value) {
+                    case 'EnteringWebexMode':
+                      console.warn(`You are entering Webex Mode`)
+                      //Run code here when Default Mode starts to configure
+                      break;
+                    case 'WebexModeStarted':
+                      console.warn(`System is in Default Mode`)
+                      stopAutomation();
+                      usb_mode= false;
+                      if (js_roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)) 
                       {
-                        OVERVIEW_DOUBLE_SOURCE_IDS = [JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID,V1];
-                      }                        
-                      main_init(); 
-                    }
-                    else if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_SECONDARY) {
-                        // we first need to stop switching if it was enabled
-                        js_roomCombined=true; //need to set this here because in secondary we do not use permanent memory for this status
-                        stopAutomation();
-
-                        //aux_init(); //if we call this, it will mess up setup that JoinSplit did for secondary
-                    }
-                    break;
-                  default:
-                    break;
-                }
+                        otherSwitcherCodec.status('CALL_DISCONNECTED').post();
+                      }
+                      break;
+                    case 'enteringUSBMode':
+                      console.warn(`You are entering USB Mode`)
+                      //Run code here when USB Mode starts to configure
+                      break;
+                    case 'USBModeStarted':
+                      console.warn(`System is in Default Mode`)
+                      startAutomation();
+                      usb_mode= true;
+                      if (js_roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY))
+                      { 
+                          otherSwitcherCodec.status('CALL_CONNECTED').post();
+                      }
+                      break;
+                    default:
+                      break;
+                  }
               }
-              break;
-            case 'USB_Mode_Version_3':
-              if (event.Type == 'Error') {
-                console.error(event)
-              } else {
-                switch (event.Value) {
-                  case 'EnteringWebexMode':
-                    console.warn(`You are entering Webex Mode`)
-                    //Run code here when Default Mode starts to configure
-                    break;
-                  case 'WebexModeStarted':
-                    console.warn(`System is in Default Mode`)
-                    stopAutomation();
-                    usb_mode= false;
-                    if (js_roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)) 
-                    {
-                      otherSwitcherCodec.status('CALL_DISCONNECTED').post();
-                    }
-                    break;
-                  case 'enteringUSBMode':
-                    console.warn(`You are entering USB Mode`)
-                    //Run code here when USB Mode starts to configure
-                    break;
-                  case 'USBModeStarted':
-                    console.warn(`System is in Default Mode`)
-                    startAutomation();
-                    usb_mode= true;
-                    if (js_roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY))
-                    { 
-                        otherSwitcherCodec.status('CALL_CONNECTED').post();
-                    }
-                    break;
-                  default:
-                    break;
-                }
-              }
-              break;
-            default:
+            }
+            else {
               console.debug({
                 Message: `Received Message from ${event.App} and was not processed`
               })
-              break;
-          }
+            }
           }
           else
           {
