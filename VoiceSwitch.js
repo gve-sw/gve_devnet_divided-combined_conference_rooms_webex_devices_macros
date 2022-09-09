@@ -1161,6 +1161,7 @@ GMM.Event.Receiver.on(event => {
 
                         if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
                             overviewShowDouble=false;
+                            js_roomCombined=false;
                             OVERVIEW_DOUBLE_SOURCE_IDS = [1,1]; // should not be needed, but useful if someone overviewdouble is enabled somehow
                             //turn off side by side at this point in case it stayed turned on!!!
                             recallSideBySideMode();
@@ -1178,6 +1179,7 @@ GMM.Event.Receiver.on(event => {
                         xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'panel_manual_override' });
                         if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
                           overviewShowDouble=true;
+                          js_roomCombined=true;
                           if (JOIN_SPLIT_CONFIG.PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT) {
                             OVERVIEW_DOUBLE_SOURCE_IDS = [V1,JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID];
                           } 
