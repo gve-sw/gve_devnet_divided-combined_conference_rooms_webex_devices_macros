@@ -507,8 +507,8 @@ xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
 
 // VIDEO OUTPUT SECTION
 // THESE SHOULD NOT BE CONFIGURED BY THE INSTALLER
-  xapi.config.set('Video Output Connector 3 MonitorRole', 'Auto') 
-    .catch((error) => { console.error("69"+error); });
+  //xapi.config.set('Video Output Connector 3 MonitorRole', 'Auto') 
+    //.catch((error) => { console.error("69"+error); }); //TODO: Check with Enrico on why we should care about this output setting on Primary
     // Secondary Codec - Monitor 3 role must be set for THIRD
 
   //TODO: put command that would mirror Display 1 and 2 if they only have one screen and are using a direct tie line to

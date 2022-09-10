@@ -438,6 +438,8 @@ let presenterQAKeepComposition=false;
 let qaCompositionTimer=null;
 
 let usb_mode = false;
+let webrtc_mode = false;
+
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // UTILITIES
@@ -597,7 +599,9 @@ function stopAutomation() {
          xapi.Command.Audio.VuMeter.StopAll({ });
          //TODO: check to see if when we stop automation we really want to switch to connectorID 1
          console.log("Switching to MainVideoSource connectorID 1 ...");
+         if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
          xapi.Command.Video.Input.SetMainVideoSource({ SourceId: 1});
+         if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , 1500);
          // using proper way to de-register handlers
          micHandler();
          micHandler= () => void 0;
@@ -673,10 +677,12 @@ async function makeCameraSwitch(input, average) {
   // we want to use for switching camera input
   var selectedSource=MAP_CAMERA_SOURCES[MICROPHONE_CONNECTORS.indexOf(input)]
 
+  if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
+
   if (presenterTracking) {
     // if we have selected Presenter Q&A mode and the codec is currently in presenterTrack mode, invoke
     // that specific camera switching logic contained in presenterQASwitch()
-    if (PRESENTER_QA_MODE) presenterQASwitch(input, selectedSource);
+    if (PRESENTER_QA_MODE && !webrtc_mode ) presenterQASwitch(input, selectedSource);
     // if the codec is in presentertracking but not in PRESENTER_QA_MODE , simply ignore the request to switch
     // cameras since we need to keep sending the presenterTrack camera. 
   }
@@ -723,6 +729,7 @@ async function makeCameraSwitch(input, average) {
       lastActiveHighInput = input;
       restartNewSpeakerTimer();
   }
+  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , 1500);
 }
 
 // function to actually switch the camera input when in presentertrack Q&A mode
@@ -822,12 +829,16 @@ function setMainVideoSource(thePresetVideoSource) {
     // the Video Input SetMainVideoSource does not work while Speakertrack is active
     // so we need to turn it off in case the previous video input was from a source where
     // SpeakerTrack is used.
+    if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
+
     if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
 
     let sourceDict={ SourceID : '0'}
     sourceDict["SourceID"]=thePresetVideoSource.toString();
     console.log("In setMainVideoSource() switching to input with SetMainVideoSource with dict: ", sourceDict  )
     xapi.command('Video Input SetMainVideoSource', sourceDict).catch(handleError);
+    if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , 1500);
+
 }
 
 
@@ -837,6 +848,7 @@ function setComposedQAVideoSource(connectorDict) {
   // SpeakerTrack is used.
   //TODO: If we turn this off here do we need to turn it back on if not using a preset for other
   // person speaking?
+  if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
   if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
   console.log("In setComposedQAVideoSource() switching to input with SetMainVideoSource with dict: ", connectorDict  )
   xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
@@ -856,6 +868,9 @@ function setComposedQAVideoSource(connectorDict) {
     // turn back on SpeakerTrack function on the codec
     xapi.command('Cameras SpeakerTrack Activate').catch(handleError);
   }
+  //if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Unmute();
+  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , 1500);
+
 }
 
 function largestMicValue() {
@@ -883,12 +898,13 @@ function averageArray(arrayIn) {
 }
 
 async function recallSideBySideMode() {
+  if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
   // only invoke SideBySideMode if not in presenter QA mode and not presentertrack is currently not active
   // because Presenter QA mode has it's own way of composing side by side. 
   if (presenterTracking ) {
     // If in PRESENTER_QA_MODE mode and we go to silence, we need to restart the composition timer
     // to remove composition (if it was there) only after the configured time has passed.
-    if (PRESENTER_QA_MODE) restartCompositionTimer();
+    if (PRESENTER_QA_MODE && !webrtc_mode ) restartCompositionTimer();
     // even if not in PRESENTER_QA_MODE , if presenterTrack is turned on, we do not want to show anyd side by side mode!
   }
   else 
@@ -899,20 +915,21 @@ async function recallSideBySideMode() {
     lastActivePTZCameraZoneObj=Z0;
     lastActivePTZCameraZoneCamera='0';
     if (overviewShowDouble) {
-          let connectorDict={ ConnectorId : [0,0]};
-          connectorDict["ConnectorId"]=OVERVIEW_DOUBLE_SOURCE_IDS;
-          console.log("Trying to use this for connector dict in recallSideBySideMode(): ", connectorDict  )
-          xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
-          const payload = { EditMatrixOutput: { sources: OVERVIEW_DOUBLE_SOURCE_IDS } };
+          if (!webrtc_mode) { //only compose if not in webrtc mode (not supported). Otherwise, just use preset 30
+            let connectorDict={ ConnectorId : [0,0]};
+            connectorDict["ConnectorId"]=OVERVIEW_DOUBLE_SOURCE_IDS;
+            console.log("Trying to use this for connector dict in recallSideBySideMode(): ", connectorDict  )
+            xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+            const payload = { EditMatrixOutput: { sources: OVERVIEW_DOUBLE_SOURCE_IDS } };
 
-          //You will need to change this GMM object name to match yours
-          setTimeout(function(){
+            //You will need to change this GMM object name to match yours
+            setTimeout(function(){
 
-              //You will need to change this GMM object name to the one you instantiated
-              localCallout.command(payload).post()
+                //You will need to change this GMM object name to the one you instantiated
+                localCallout.command(payload).post()
 
-            }, 250) //250ms delay to allow the main source to resolve first
-
+              }, 250) //250ms delay to allow the main source to resolve first
+          }
           if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
           xapi.command('Camera Preset Activate', { PresetId: 30 }).catch(handleError);
       }
@@ -937,10 +954,12 @@ async function recallSideBySideMode() {
     lastActiveHighInput = 0;
     lowWasRecalled = true;
   }
+  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , 1500);
 }
 
 async function recallFullPresenter() {
   console.log("Recalling full presenter in PresenterTrack mode....")
+  if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
   // the Video Input SetMainVideoSource does not work while Speakertrack is active
   // so we need to turn it off in case the previous video input was from a source where
   // SpeakerTrack is used.
@@ -948,6 +967,7 @@ async function recallFullPresenter() {
   let presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
   let connectorDict={ ConnectorId : presenterSource};
   xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , 1500);
 
 }
 
@@ -960,7 +980,7 @@ xapi.event.on('UserInterface Extensions Panel Clicked', (event) =>
 {
     if(event.PanelId == 'panel_toggle_presentertrack')
     {
-      if (PRESENTER_QA_MODE) {
+      if (PRESENTER_QA_MODE && !webrtc_mode ) {
         if (presenterTracking) {
           console.log("Turning off PresenterTrack...");
           recallFullPresenter();
@@ -1000,7 +1020,7 @@ function hidePTPanelButton()
 }
 
 // upon initialization, we need to hide or show this custom button (only shows in call though)
-if (PRESENTER_QA_MODE) {showPTPanelButton()} else {hidePTPanelButton()};
+if (PRESENTER_QA_MODE && !webrtc_mode ) {showPTPanelButton()} else {hidePTPanelButton()};
 
 
 function handleOverrideWidget(event)
@@ -1180,6 +1200,7 @@ GMM.Event.Receiver.on(event => {
                         if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
                           overviewShowDouble=true;
                           js_roomCombined=true;
+                          stopAutomation(); //TODO: confirm no side effects from this introduced to handle WebRTC right after joining
                           if (JOIN_SPLIT_CONFIG.PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT) {
                             OVERVIEW_DOUBLE_SOURCE_IDS = [V1,JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID];
                           } 
@@ -1207,6 +1228,13 @@ GMM.Event.Receiver.on(event => {
                 console.error(event)
               } else {
                   switch (event.Value) {
+                    /* TODO: uncomment once USB Mode 3 Beta implements this and I test it
+                    case 'Initialized':
+                      console.warn(`USB mode initialized...`)
+                      const object = { AlterUSBConfig: { config: 'matrix_Camera_Mode', value: true } } 
+                      localCallout.command(object).post() 
+                      break;
+                      */
                     case 'EnteringWebexMode':
                       console.warn(`You are entering Webex Mode`)
                       //Run code here when Default Mode starts to configure
@@ -1488,7 +1516,7 @@ function restartCompositionTimer() {
 
 function onCompositionTimerExpired() {
   presenterQAKeepComposition=false;
-  if (PRESENTER_QA_MODE && presenterTracking) {
+  if (PRESENTER_QA_MODE && !webrtc_mode  && presenterTracking) {
     if (!PRESENTER_QA_AUDIENCE_MIC_IDS.includes(lastActiveHighInput)) {
       // restore single presentertrackview because the person still speaking
       // is not an audience member and the timer has expired (could also be due to silence)
@@ -1572,6 +1600,7 @@ function init() {
     xapi.Event.CallSuccessful.on(async () => {
       if (SWITCHER_ROLE===SWITCHER_MAIN) {
         console.log("Starting new call timer...");
+        webrtc_mode=false; // just in case we do not get the right event when ending webrtc calls
         startAutomation();
         startInitialCallTimer();
       }
@@ -1594,6 +1623,46 @@ function init() {
       }
     });
 
+    // register WebRTC Mode
+    xapi.Status.UserInterface.WebView[1].Type
+    .on(async(value) => {
+      if (value==='WebRTCMeeting') {
+        webrtc_mode=true;
+        if (SWITCHER_ROLE===SWITCHER_MAIN) {
+            console.log("Starting new call timer...");
+            startAutomation();
+            startInitialCallTimer();
+          }
+          if (js_roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY))
+          { 
+              otherSwitcherCodec.status('CALL_CONNECTED').post();
+          }
+
+      } else {
+        webrtc_mode=false;
+        if (SWITCHER_ROLE===SWITCHER_MAIN && !usb_mode) {
+            console.log("Turning off Self View....");
+            xapi.Command.Video.Selfview.Set({ Mode: 'off'});
+            stopAutomation();
+          }
+          if (js_roomCombined && (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)) 
+          {
+            otherSwitcherCodec.status('CALL_DISCONNECTED').post();
+          }
+      }
+    });
+
+    // register to receive MainVideoSource change events in support of WebRTC mode to
+    // implement workaround
+    xapi.Status.Video.Input.MainVideoSource
+    .on(async (value) => {
+      //console.log(value);
+      if (webrtc_mode) {
+        console.log('Video switched... unmuting from handler..');
+        await xapi.Command.Video.Input.MainVideo.Unmute();
+      }
+      });
+
     // register to receive events when someone manually turns on self-view
     // so we can keep the custom toggle button in the right state
     xapi.Status.Video.Selfview.Mode.on(evalSelfView);
@@ -1609,7 +1678,7 @@ function init() {
         presenterTracking=true;
         // When composing the standard PresenterTrack selection button in the camera control is missing
         // so we show a custom panel button to let users turn it on/off
-        if (PRESENTER_QA_MODE) { 
+        if (PRESENTER_QA_MODE && !webrtc_mode ) { 
           showPTPanelButton();
           recallFullPresenter();
         }
@@ -1620,7 +1689,7 @@ function init() {
         presenterTracking=false;
         // When composing the standard PresenterTrack selection button in the camera control is missing
         // so we show a custom panel button to let users turn it on/off
-        if (PRESENTER_QA_MODE) showPTPanelButton();
+        if (PRESENTER_QA_MODE && !webrtc_mode ) showPTPanelButton();
       }
     });
       
