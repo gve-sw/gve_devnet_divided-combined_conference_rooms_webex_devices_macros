@@ -105,13 +105,6 @@ const COMBINED_PRESENTERTRACK_SETTINGS = {
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 */
 
-// SECONDARY_SPLIT_MODE_VIDEO_MONITORS contains the option for the 'Video Monitors' setting 
-// for when in split mode which can be 'Single', 'Dual' or 'DualPresentationOnly'
-//TODO: on Secondary, store away number of monitors configured before going combined
-// so we can set back to what it was. This should be upon config so should not need permanent
-// storage, but if it does, then will have to retrieve current value, store in GMM and 
-// retrieve again which is more time consuming than this constant
-const SECONDARY_SPLIT_MODE_VIDEO_MONITORS='Dual'
 
 // Change SECONDARY_COMBINED_VOLUME_CHANGE_STEPS if you want to adjust the volume on the secondary
 // codec when switching modes. Each step is equivalent to a 0.5 dB change. 
@@ -155,8 +148,13 @@ var wallSensorOverride = false;
 var JoinSplit_secondary_settings = {
   UltrasoundMax : 0,
   WakeupOnMotionDetection: '',
-  StandbyControl : ''
+  StandbyControl : '',
+  VideoMonitors : ''
 }
+
+
+
+
 
 /**
   * The following functions allow the ability to set the Pins High or Low
@@ -211,8 +209,9 @@ async function storeSecondarySettings(ultraSoundMaxValue,wState,sState) {
   JoinSplit_secondary_settings.UltrasoundMax=ultraSoundMaxValue;
   JoinSplit_secondary_settings.WakeupOnMotionDetection=wState;
   JoinSplit_secondary_settings.StandbyControl=sState;
+  JoinSplit_secondary_settings.VideoMonitors=await xapi.Config.Video.Monitors.get()
   await GMM.write.global('JoinSplit_secondary_settings',JoinSplit_secondary_settings).then(() => {
-    console.log({ Message: 'ChangeState', Action: 'secondary settings for Ultrasound, WakeupOnMotionDetection and StandbyControl stored.' })
+    console.log({ Message: 'ChangeState', Action: 'secondary settings for Ultrasound, WakeupOnMotionDetection , StandbyControl and VideoMonitors stored.' })
   });
 }
 
@@ -592,7 +591,7 @@ function setSecondaryDefaultConfig() {
 // VIDEO
 xapi.config.set('Video DefaultMainSource', '1')
     .catch((error) => { console.error("50"+error); });
-  xapi.config.set('Video Monitors', SECONDARY_SPLIT_MODE_VIDEO_MONITORS)
+  xapi.config.set('Video Monitors', JoinSplit_secondary_settings.VideoMonitors)
     .catch((error) => { console.error("51"+error); });
   xapi.command('Video Input SetMainVideoSource', {  ConnectorID: 1 })
     .catch((error) => { console.error("52"+error); });
@@ -1098,11 +1097,14 @@ async function secondaryStandaloneMode()
   .catch((error) => { console.error(error); });
   }
 
-
+  if (JoinSplit_secondary_settings.VideoMonitors != '') {
+    xapi.Config.Video.Monitors.set(JoinSplit_secondary_settings.VideoMonitors) 
+    .catch((error) => { console.error(error); });
+    }
 
   xapi.command('Conference DoNotDisturb Deactivate')
     .catch((error) => { console.error(error); });
-  xapi.Config.Video.Monitors.set(SECONDARY_SPLIT_MODE_VIDEO_MONITORS); 
+  
   xapi.command('Video Matrix Reset').catch((error) => { console.error(error); }); 
   xapi.config.set('UserInterface OSD Mode', 'Auto').catch((error) => { console.error("90"+error); });
   let gmm_status={

@@ -206,6 +206,7 @@ const INITIAL_CALL_TIME = 15000; // 15 seconds
 // transmitting video during camera movement for P60 and PTZ cameras
 const VIDEO_SOURCE_SWITCH_WAIT_TIME = 500; // 500 ms
 
+const WEBRTC_VIDEO_UNMUTE_WAIT_TIME=1500;
 
 // Microphone High/Low Thresholds
 const MICROPHONELOW  = 6;
@@ -224,7 +225,9 @@ Presenter Track Q&A Mode
 // activity, the outgoing video for the meeting will be composed between the presenter and the video
 // source assigned to the microphone where the sustained activity was detected. 
 // NOTE: this is not supported when using SpeakerTrack 60 cameras for the main audience
-const PRESENTER_QA_MODE = false
+//TODO: move this down to the variable section and do not make it configurable!!! It is now controlled
+// via custom panel
+let PRESENTER_QA_MODE = false
 
 
 //PRESENTER_QA_AUDIENCE_MIC_IDS is an array for Mic IDs that are being used for the audience. 
@@ -434,6 +437,7 @@ let lastActivePTZCameraZoneCamera='0';
 let micHandler= () => void 0;
 
 let presenterTracking=false;
+let presenterTrackConfigured=false;
 let presenterQAKeepComposition=false;
 let qaCompositionTimer=null;
 
@@ -494,7 +498,22 @@ function evalSelfView(value) {
   }
 }
 
-function main_init() {
+function evalPresenterTrack(value){
+  let currentVal='1';
+  if (SWITCHER_ROLE===SWITCHER_MAIN && presenterTrackConfigured) {
+    if (value==='Follow' || value==='Persistent') {
+        if (PRESENTER_QA_MODE) {
+          currentVal='3';
+        }
+        else {
+          currentVal='2';
+        }
+    } 
+    xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_pt_settings', Value: currentVal}).catch(handleMissingWigetError);
+  }
+}
+
+async function main_init() {
   console.log('main_init');
   // configure HTTP settings
   xapi.config.set('HttpClient Mode', 'On').catch(handleError);
@@ -515,6 +534,9 @@ function main_init() {
   //  set self-view toggle on custom panel depending on Codec status that might have been set manually
   xapi.Status.Video.Selfview.Mode.get().then(evalSelfView);
 
+  let enabledGet= await xapi.Config.Cameras.PresenterTrack.Enabled.get()
+  presenterTrackConfigured= (enabledGet=='True')? true : false;
+  addCustomManualOverridePanel();
 
   //TODO: based on GMM variables, if set for JoinSplit and in Join (Combine) mode, trigger the right setup for that! 
 }
@@ -601,7 +623,7 @@ function stopAutomation() {
          console.log("Switching to MainVideoSource connectorID 1 ...");
          if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
          xapi.Command.Video.Input.SetMainVideoSource({ SourceId: 1});
-         if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , 1500);
+         if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
          // using proper way to de-register handlers
          micHandler();
          micHandler= () => void 0;
@@ -729,7 +751,7 @@ async function makeCameraSwitch(input, average) {
       lastActiveHighInput = input;
       restartNewSpeakerTimer();
   }
-  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , 1500);
+  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 }
 
 // function to actually switch the camera input when in presentertrack Q&A mode
@@ -837,7 +859,7 @@ function setMainVideoSource(thePresetVideoSource) {
     sourceDict["SourceID"]=thePresetVideoSource.toString();
     console.log("In setMainVideoSource() switching to input with SetMainVideoSource with dict: ", sourceDict  )
     xapi.command('Video Input SetMainVideoSource', sourceDict).catch(handleError);
-    if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , 1500);
+    if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 
 }
 
@@ -869,7 +891,7 @@ function setComposedQAVideoSource(connectorDict) {
     xapi.command('Cameras SpeakerTrack Activate').catch(handleError);
   }
   //if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Unmute();
-  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , 1500);
+  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 
 }
 
@@ -954,7 +976,7 @@ async function recallSideBySideMode() {
     lastActiveHighInput = 0;
     lowWasRecalled = true;
   }
-  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , 1500);
+  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 }
 
 async function recallFullPresenter() {
@@ -967,7 +989,7 @@ async function recallFullPresenter() {
   let presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
   let connectorDict={ ConnectorId : presenterSource};
   xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
-  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , 1500);
+  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 
 }
 
@@ -995,7 +1017,7 @@ xapi.event.on('UserInterface Extensions Panel Clicked', (event) =>
     }
 });
 
-
+/*
 function showPTPanelButton() {
   let theName=(presenterTracking ? "Stop PresenterTrack" : "Start PresenterTrack");
   xapi.Command.UserInterface.Extensions.Panel.Save({ PanelId: 'panel_toggle_presentertrack' },
@@ -1018,12 +1040,13 @@ function hidePTPanelButton()
     xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'panel_toggle_presentertrack' });
 
 }
+*/
 
 // upon initialization, we need to hide or show this custom button (only shows in call though)
-if (PRESENTER_QA_MODE && !webrtc_mode ) {showPTPanelButton()} else {hidePTPanelButton()};
+//if (PRESENTER_QA_MODE && !webrtc_mode ) {showPTPanelButton()} else {hidePTPanelButton()};
 
 
-function handleOverrideWidget(event)
+async function handleOverrideWidget(event)
 {
   if (SWITCHER_ROLE===SWITCHER_MAIN) {
          if (event.WidgetId === 'widget_override')
@@ -1062,6 +1085,52 @@ function handleOverrideWidget(event)
                   xapi.Command.Video.Selfview.Set({ FullscreenMode: 'On', Mode: 'On', OnMonitorRole: 'First'});
                }
          }
+
+         if (event.WidgetId === 'widget_pt_settings') {
+          let presenterSource = 0;
+          let connectorDict={};
+          if (presenterTrackConfigured) {
+            switch (event.Value) {
+              case '1':
+                console.log('Off');
+                console.log("Turning off PresenterTrack...");
+                recallFullPresenter();
+                xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Off' });
+                PRESENTER_QA_MODE=false;
+              break;
+
+              case '2':
+                  console.log('On');
+                  console.log("Turning on PresenterTrack only...");
+                  if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
+                  xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
+                  presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
+                  connectorDict={ ConnectorId : presenterSource};
+                  xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+                  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+                  xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' }); //TODO: Setting to Follow or Persistent both work, need to sort out which to keep
+                  PRESENTER_QA_MODE=false;
+              break;
+
+              case '3':
+                    console.log('QA Mode');
+                    console.log("Turning on PresenterTrack with QA Mode...");
+                    if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
+                    xapi.command('Cameras SpeakerTrack Deactivate').catch(handleError);
+                    presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
+                    connectorDict={ ConnectorId : presenterSource};
+                    xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+                    if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+                    xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' }); //TODO: Setting to Follow or Persistent both work, need to sort out which to keep  
+                    PRESENTER_QA_MODE=true;
+              break;              
+
+            }
+          }
+          else {
+            console.log("PresenterTrack not configured!!!");
+          }
+         }
   }
 }
 
@@ -1080,85 +1149,135 @@ function handleMissingWigetError(error) {
 
 function addCustomManualOverridePanel() {
 
-  // add custom control panel for turning onn/off automatic mode
+  let testAutoToggle=`
+  <Name>Automatic switching</Name>
+  <Widget>
+    <WidgetId>widget_8</WidgetId>
+    <Name>Off</Name>
+    <Type>Text</Type>
+    <Options>size=1;fontSize=normal;align=center</Options>
+  </Widget>
+  <Widget>
+    <WidgetId>widget_override</WidgetId>
+    <Type>ToggleButton</Type>
+    <Options>size=1</Options>
+  </Widget>
+  <Widget>
+    <WidgetId>widget_6</WidgetId>
+    <Name>On</Name>
+    <Type>Text</Type>
+    <Options>size=2;fontSize=normal;align=center</Options>
+  </Widget>
+  `;
+  let testAutoToggleDisabled=`
+  <Name>Automatic switching</Name>
+  <Widget>
+    <WidgetId>widget_tg_disabled</WidgetId>
+    <Name>Disabled in Combined mode</Name>
+    <Type>Text</Type>
+    <Options>size=4;fontSize=normal;align=center</Options>
+  </Widget>
+  `;
+
+  let testSelfViewToggle=`
+  <Name>Full screen self-view test</Name>
+  <Widget>
+    <WidgetId>widget_14</WidgetId>
+    <Name>Off</Name>
+    <Type>Text</Type>
+    <Options>size=1;fontSize=normal;align=center</Options>
+  </Widget>
+  <Widget>
+    <WidgetId>widget_FS_selfview</WidgetId>
+    <Type>ToggleButton</Type>
+    <Options>size=1</Options>
+  </Widget>
+  <Widget>
+    <WidgetId>widget_12</WidgetId>
+    <Name>On</Name>
+    <Type>Text</Type>
+    <Options>size=2;fontSize=normal;align=center</Options>
+  </Widget>
+  `;
+  let testSelfViewToggleDisabled=`
+  <Name>Full screen self-view test</Name>
+  <Widget>
+    <WidgetId>widget_sv_disabled</WidgetId>
+    <Name>Disabled in combined mode</Name>
+    <Type>Text</Type>
+    <Options>size=3;fontSize=normal;align=center</Options>
+  </Widget>`;
+
+  let presenterTrackButtons=`
+  <Name>PresenterTrack</Name>
+  <Widget>
+    <WidgetId>widget_pt_settings</WidgetId>
+    <Type>GroupButton</Type>
+    <Options>size=4</Options>
+    <ValueSpace>
+      <Value>
+        <Key>1</Key>
+        <Name>Off</Name>
+      </Value>
+      <Value>
+        <Key>2</Key>
+        <Name>On</Name>
+      </Value>
+      <Value>
+        <Key>3</Key>
+        <Name>QA Mode</Name>
+      </Value>
+    </ValueSpace>
+  </Widget>
+  `;
+  let presenterTrackButtonsDisabled=`
+  <Name>PresenterTrack</Name>
+  <Widget>
+    <WidgetId>widget_pt_disabled</WidgetId>
+    <Name>Not configured</Name>
+    <Type>Text</Type>
+    <Options>size=3;fontSize=normal;align=center</Options>
+  </Widget>`;
+
+  // Here we do the conditional assignment of the rows
+  let testRowValue=(!js_roomCombined)? testAutoToggle : testAutoToggleDisabled;
+
+  let selfViewRowValue=(!js_roomCombined)? testSelfViewToggle : testSelfViewToggleDisabled;
+
+  let presenterTrackRowValue=(presenterTrackConfigured)? presenterTrackButtons : presenterTrackButtonsDisabled;
+
+  // add custom control panel for turning on/off automatic mode
   xapi.Command.UserInterface.Extensions.Panel.Save({ PanelId: 'panel_manual_override' },
   `<Extensions>
-    <Version>1.8</Version>
-    <Panel>
-      <Order>1</Order>
-      <PanelId>panel_manual_override</PanelId>
-      <Origin>local</Origin>
-      <Type>Statusbar</Type>
-      <Icon>Camera</Icon>
-      <Color>#07C1E4</Color>
-      <Name>Camera Test</Name>
-      <ActivityType>Custom</ActivityType>
-      <Page>
-        <Name>Camera Test</Name>
-        <Row>
-          <Name/>
-          <Widget>
-            <WidgetId>widget_9</WidgetId>
-            <Name>Select manual or automatic control of Quad Cameras</Name>
-            <Type>Text</Type>
-            <Options>size=4;fontSize=normal;align=center</Options>
-          </Widget>
-        </Row>
-        <Row>
-          <Name/>
-          <Widget>
-            <WidgetId>widget_8</WidgetId>
-            <Name>Manual</Name>
-            <Type>Text</Type>
-            <Options>size=1;fontSize=normal;align=center</Options>
-          </Widget>
-          <Widget>
-            <WidgetId>widget_override</WidgetId>
-            <Type>ToggleButton</Type>
-            <Options>size=1</Options>
-          </Widget>
-          <Widget>
-            <WidgetId>widget_6</WidgetId>
-            <Name>Automatic</Name>
-            <Type>Text</Type>
-            <Options>size=2;fontSize=normal;align=center</Options>
-          </Widget>
-        </Row>
-        <Row>
-          <Name/>
-          <Widget>
-            <WidgetId>widget_10</WidgetId>
-            <Name>For testing while not in call, turn on fullscreen Selfview</Name>
-            <Type>Text</Type>
-            <Options>size=4;fontSize=normal;align=center</Options>
-          </Widget>
-        </Row>
-        <Row>
-          <Name/>
-          <Widget>
-            <WidgetId>widget_14</WidgetId>
-            <Name>Off</Name>
-            <Type>Text</Type>
-            <Options>size=1;fontSize=normal;align=center</Options>
-          </Widget>
-          <Widget>
-            <WidgetId>widget_FS_selfview</WidgetId>
-            <Type>ToggleButton</Type>
-            <Options>size=1</Options>
-          </Widget>
-          <Widget>
-            <WidgetId>widget_12</WidgetId>
-            <Name>Selfview</Name>
-            <Type>Text</Type>
-            <Options>size=2;fontSize=normal;align=center</Options>
-          </Widget>
-        </Row>
-        <PageId>panel_manual_override</PageId>
-        <Options/>
-      </Page>
-    </Panel>
-  </Extensions>
+  <Version>1.9</Version>
+  <Panel>
+    <Origin>local</Origin>
+    <Location>HomeScreenAndCallControls</Location>
+    <Icon>Camera</Icon>
+    <Color>#07C1E4</Color>
+    <Name>Camera Control</Name>
+    <ActivityType>Custom</ActivityType>
+    <Page>
+      <Name>Advanced Camera Control</Name>
+      <Row>
+      ${testRowValue}
+      </Row>
+      <Row>
+      ${selfViewRowValue}
+      </Row>
+      <Row>
+      ${presenterTrackRowValue}
+      </Row>
+      <PageId>panel_manual_override</PageId>
+      <Options/>
+    </Page>
+  </Panel>
+</Extensions>
   `);
+
+if (presenterTrackConfigured) {
+  xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_pt_settings', Value: '1'}).catch(handleMissingWigetError);
+}
 
 }
 
@@ -1177,7 +1296,6 @@ GMM.Event.Receiver.on(event => {
                         console.warn(`Room switching to split mode`)
                         AUX_CODEC_IP=''
                         AUX_CODEC={ enable: false , online: false};
-                        addCustomManualOverridePanel();
 
                         if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
                             overviewShowDouble=false;
@@ -1190,13 +1308,13 @@ GMM.Event.Receiver.on(event => {
                           js_roomCombined=false; //need to set this here because in secondary we do not use permanent memory for this status
                             main_init(); // main_init() also stops all vuMeters after we turned it on when joined in secondary room
                         }
+                        addCustomManualOverridePanel();
+
                         break;
                       case 'ROOMS_JOINED':
                         console.warn(`Room switching to joined mode`)
                         AUX_CODEC_IP=JOIN_SPLIT_CONFIG.OTHER_CODEC_IP
                         AUX_CODEC={ enable: (AUX_CODEC_IP!='') , online: false};
-                        //Remove custom panel for turning on and off automation because it causes unexpected behaviors in combined mode
-                        xapi.Command.UserInterface.Extensions.Panel.Remove({ PanelId: 'panel_manual_override' });
                         if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
                           overviewShowDouble=true;
                           js_roomCombined=true;
@@ -1207,7 +1325,8 @@ GMM.Event.Receiver.on(event => {
                           else 
                           {
                             OVERVIEW_DOUBLE_SOURCE_IDS = [JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID,V1];
-                          }                        
+                          }   
+                          recallSideBySideMode();                     
                           main_init(); 
                         }
                         else if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_SECONDARY) {
@@ -1217,6 +1336,8 @@ GMM.Event.Receiver.on(event => {
 
                             //aux_init(); //if we call this, it will mess up setup that JoinSplit did for secondary
                         }
+                        addCustomManualOverridePanel();
+
                         break;
                       default:
                         break;
@@ -1492,6 +1613,7 @@ function startInitialCallTimer() {
 function onInitialCallTimerExpired() {
   console.log('onInitialCallTimerExpired');
   allowCameraSwitching = true;
+  InitialCallTimer=null;
   if (has_SpeakerTrack) xapi.command('Cameras SpeakerTrack Activate').catch(handleError);
 }
 
@@ -1676,21 +1798,16 @@ function init() {
       console.log('Received PT status as: ',value)
       if (value==='Follow' || value==='Persistent') { 
         presenterTracking=true;
-        // When composing the standard PresenterTrack selection button in the camera control is missing
-        // so we show a custom panel button to let users turn it on/off
         if (PRESENTER_QA_MODE && !webrtc_mode ) { 
-          showPTPanelButton();
+          //showPTPanelButton();
           recallFullPresenter();
         }
-        
-
       }
       else{
         presenterTracking=false;
-        // When composing the standard PresenterTrack selection button in the camera control is missing
-        // so we show a custom panel button to let users turn it on/off
-        if (PRESENTER_QA_MODE && !webrtc_mode ) showPTPanelButton();
       }
+      // Update custom panel
+      evalPresenterTrack(value);
     });
       
     // first check to see if the room is supposed to be in combined mode as per permanent storage
@@ -1718,9 +1835,8 @@ function init() {
     // not in combined mode or not using JoinSplit macro, just check for switcher role and init accordingly
     if (SWITCHER_ROLE===SWITCHER_MAIN) {
           main_init();
-          addCustomManualOverridePanel();
           // next, set Automatic mode toggle switch on custom panel off since the macro starts that way
-          xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_override', Value: 'off'});
+          xapi.command('UserInterface Extensions Widget SetValue', {WidgetId: 'widget_override', Value: 'off'}).catch(handleMissingWigetError);
       }
       else {
         aux_init();
