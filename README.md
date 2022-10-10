@@ -13,7 +13,7 @@ Macros to automate dividing and combining conference rooms with Webex devices so
   
   
   
-## NOTE: JoinSplit.js and VoiceSwitch.js source files temporarily removed. 
+## NOTE: Macro files JoinSplit.js and VoiceSwitch.js have been temporarily removed to fix problems found in testing
 
 
 
