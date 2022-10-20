@@ -1,6 +1,5 @@
 # GVE DevNet Divided-Combined Conference Rooms Webex Devices Macros
-Macros to automate dividing and combining conference rooms with Webex devices so that the same equipment can be used in both modes to join conference calls  
-
+Macros to automate dividing and combining conference rooms with Webex Codec Pro devices so that the same equipment can be used in both modes to join conference calls  
 
 ## Contacts  
 * Gerardo Chaves (gchaves@cisco.com)
@@ -11,13 +10,9 @@ Macros to automate dividing and combining conference rooms with Webex devices so
 * Javascript  
 * xAPI  
   
-  
-  
-## NOTE: Macro files JoinSplit.js and VoiceSwitch.js have been temporarily removed to fix problems found in testing
-
-
-
-
+## Requirements
+* Minimum RoomOS version 10.17.1   
+* OS11 preview mode disabled  
 
 ## Installation/Configuration  
 
@@ -25,14 +20,11 @@ Follow the [Version 3 Two-way System Drawing](./Version_3_Two-way_System_Drawing
 
 For configuration setup and further hardware setup instructions, refer to the [Installation Instructions for Divisible Conference Rooms Version 3](./Installation_Instructions_for_Divisible_Conference_Rooms_Version_3.pdf) document in this repository.  
 
-Install GMM_Lib.js, JoinSplit.js and VoiceSwitch.js on each codec (primary and secondary)  
+Install GMM_Lib.js and join_split.js on each codec (primary and secondary)  
 
-If you also have installed the USB Mode Version 3 macro, you need to edit it and set the `matrix_Camera_Mode` constant to `true`  
+If you wish to use the USB Mode v3 macro for USB passthru , install the USB_Mode_Version_3.js macro onto the codec(s) you wish to use it with.    
 
-NOTE: The macro modules contained in this repository and the USB Mode Macro Version 3 use the same macro library contained in GMM_Lib.js , if 
-you already installed it for the USB Mode Macro, there is no need to install it again.  
-
-Here is a summary of their roles as modules of this Divided-Combined functionality: 
+Here is a summary of each macro in this repository: 
 
 ### GMM_Lib.js  
 
@@ -40,40 +32,37 @@ This is a library shared by various Webex Device macros that simplifies communic
 More details at: https://github.com/CiscoDevNet/roomdevices-macros-samples/tree/master/Global%20Macro%20Messaging  
 
 
-### JoinSplit.js  
+### USB_Mode_Version_3.js  
 
-This is the standalone versions of the join/split macro module meant to work together with the Switcher and future Ducker 
-and USBMode modules via events on the same codec and across codecs with the GMM library.  
-Communications needed between Primary and Secondary codecs to keep the codec awake and set the correct 
-video layouts is delegated to the VoiceSwitch macros that should be installed and configured on the corresponding rooms  
-IMPORTANT: Turn on the JoinSplit macro on the Primary codec before turning it on in Secondary to give the macro a chance 
-to set PIN 4 to the correct Join/Split state according to what is stored in permanent storage.  
-
-Once you have installed JoinSplit.js in both the Primary and Secondary codecs, edit as needed the constants in  
-sections 1, 2 and 3 of that file before turning on the macro.  
+This module is optional. It is a Beta version of the USB Mode V3 macro. Once the official version is published, you can use that version instead.  
 
 
-### VoiceSwitch.js  
+### join_split_base.js  
 
-This switcher module of the Divided-Combined Conference Room macro is based on the Executive Room Voice Activated Switching macro published at: https://github.com/gve-sw/gve_devnet_webex_devices_executive_room_voice_activated_switching_macro  
-It will eventually be the standalone version of the Executive Room Voice Activated Switching macro  
-In the context of the Divided-Combined Conference Room macro, it needs to be configured as needed 
-for when the rooms are SEPARATE or SPLIT following the restrictions imposed by the Join-Split room design.  
-The macro will change the switching behavior of both the primary and secondary rooms when in combined 
-mode and switch back to what you configure here when the rooms are split again.  
-IMPORTANT: Turn on the JoinSplit and VoiceSwitch macros on the Primary codec before turning them on 
-in the secondary since permanent memory storage in the Primary contains the correct combined or split 
-state of the rooms in case the devices reset or power cycle and need to revert to that persistent state.  
+This is a consolidated join/split and switching module meant to work together with the optional USB Mode version 3 module via events on the same codec and across codecs with the GMM library.  
+In addition to handling configuration changes when combining or splitting rooms and switching video inputs based on active speakers, it handles communications needed between Primary and Secondary codecs to keep the codec awake and set the correct video layouts  
 
-Once you have installed VoiceSwitch.js in both the Primary and Secondary codecs, edit as needed the constants in  
-sections 1, 2, 3, 4 and 5 of that file before turning on the macro.  
+Once you have installed join_split_base.js in both the Primary and Secondary codecs, edit as needed the constants in sections 1 through 6 of that file before turning on the macro.  
 
+IMPORTANT: Turn on the join_split_base macro on the Primary codec before turning it on in Secondary to give the macro a chance to set PIN 4 to the correct Join/Split state according to what is stored in permanent storage.  Also, turn on only the join_split_base macro on each codec.  DO NOT turn on the GMM_Lib macro, it is just a library included by the other two.
 
-IMPORTANT: Turn on only the JoinSplit and VoiceSwitch macros on each codec starting with those on the Primary and then on the Secondary codec.  DO NOT turn on the GMM_Lib macro, it is just a library included by the other two.   
+NOTE: The macro will retrieve the setting for Video Monitors from each codec to validate it is not set to an illegal value (Auto, Triple or TriplePresentationOnly). After passing that validation, it will store it persistently in the Memory_Storage macro to properly handle join/split operations. If you decide you need to change the Video Monitor Settings on the codecs after initial installation, stop the join_split_base macro on both codecs, delete the Memory_Storage and then make the configuration change in the codec web interface. After that, perform initial setup again.  
+
 
 ## Usage  
 
-The macros are running and have done the initial configuration, you can switch room configurations from joined/combined to split/standalone by either triggering the wall switch with the divider wall between them or manually on the Touch10 or Navigator associated to the Primary codec as per configuration of the USE_WALL_SENSOR constant in JoinSplit.js of the Primary codec.  
+The macros are running and have done the initial configuration, you can switch room configurations from joined/combined to split/standalone by either triggering the wall switch with the divider wall between them or manually on the Touch10 or Navigator associated to the Primary codec as per configuration of the USE_WALL_SENSOR constant in join_split_base.js of the Primary codec.  
+
+To trigger the automatic switching behavior between rooms when combined, either connec to a call or manually turn on SpeakerTrack on the quadcam.  
+
+If you turn off SpeakerTrack manually while in a call, the automatic switching will pause until you turn it back on again. During this time, you can select another camera in the codec, such as a PTZ camera focused on a Whiteboard, which will be used in the call and even when there is audio activity in the secondary room the macro will not switch to that camera until you turn speakertrack back on.   
+
+During a call, you can use the Auto Q&A custom panel button to turn on PresenterTrack with our without the Q&A mode option. When in Presenter Track mode with with Q&A mode enabled, the macro will take care of keeping the focus on the presenter and if a question comes in from the audience from either room it will compose the image of the presenter plust the audience member while they are talking and a few seconds afterwards (controlled by the PRESENTER_QA_KEEP_COMPOSITION_TIME configurable constant in the macro)  
+
+The macro works when used in combination with the USB Mode v3 macro. Please note that when in USB Mode, you cannot combine or split rooms until you exit out of that mode.  
+
+NOTE: WebRTC support (i.e. calls to Google Meet) in this macro is "experimental" due to lack of full support for camera swtiching when WebRTC calls. The switching in this is accomplished by temporarily muting video, switching and then turning back on with a 1.5 second delay so you will experience a blank screen being sent to the other end during that switching. Please note that if you turn off automation manually by turning off Speakertrack while in a WebRTC call, even if you select a different camera it will not be sent automatically to the other side since the "workaround" of muting for 1.5 seconds is disabled when the macro is not in automatic switching mode. In this situation, you must manually select the new camera to use, mute the outgoing video using the Touch 10 button, wait at least 1.5 seconds and then Un-mute the video also on the Touch10 button.  
+
 
 # Screenshots
 
