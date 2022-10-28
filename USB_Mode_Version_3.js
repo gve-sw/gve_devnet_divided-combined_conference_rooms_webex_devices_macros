@@ -30,9 +30,9 @@ or implied.
  * THIS IS A BETA BUILD< DO NOT RE-DISTROBUTE
  * ***********************
  * 
- * Version: Beta 3-0-5
- * Released: 07/24/21
- * Last Update: 9/20/2022 4:20pm EST
+ * Version: Beta 3-0-6
+ * Released: July 24, 2022
+ * Last Update: October 21, 2022
  *    
  *    This USB Mode macro requires additional hardware for full operation
  *       Please review the setup documentation before you proceed
@@ -69,10 +69,12 @@ import { GMM } from './GMM_Lib';
 //[ USB Mode Configuration Start ]************************/
 
 //Configuration option(s) below this line apply to all profiles
+const check4_New_USBVersion_Notifications = true;                      // Default Value: true; Accepted Values: <true, false>; Checks for new USB Mode Version periodically
+
 const usbWelcomePrompt = true;
 
 const hideCustomPanels_inUSBMode = false;                   // Default Value: false; Accepted Values: <true, false>
-const hideCustomPanels_inUSBMode_PanelIds = [];             // Example Format: ["panel_1", "panel_2", "panel_3", "panel_Etc"]
+const hideCustomPanels_inUSBMode_PanelIds = ['TestPanel_1'];             // Example Format: ["panel_1", "panel_2", "panel_3", "panel_Etc"]
 
 const hideCustomPanels_inWebexMode = false;                 // Default Value: false; Accepted Values: <true, false>
 const hideCustomPanels_inWebexMode_PanelIds = [];           // Example Format: ["panel_4", "panel_5", "panel_6"]
@@ -95,7 +97,7 @@ const reporting_Token = '';                                 // Auth token requir
 //   rather than having this token written explicitly in the macro
 
 //Configuration option(s) below this line only apply to all profiles except the [pano] amd [room55] profile
-const matrix_Camera_Mode = true;                            // Replaces Selfview mechanic with a Matrix Output to the Capture Card instead. Prevents Desktop from accidentally showing, but is restricted to 1 camera
+const matrix_Camera_Mode = false;                            // Replaces Selfview mechanic with a Matrix Output to the Capture Card instead. Prevents Desktop from accidentally showing, but is restricted to 1 camera
 
 //Configuration option(s) below this line only apply to [room55] and [plus] profiles
 const microphone_Output_Mode = 'line';                      // Choose how microphone audio is sent to capture device // Default Value: 'line'; Accepted Values: <'line', 'hmdi'>
@@ -189,14 +191,16 @@ const panelIds = {
 //Enforces minimum OS version, as well as necessary system configurations
 //Recovers last known system state in case of unexpected boot or runtime crash
 async function init() {
-  await check4_New_USB_Mode_Version()
+  if (check4_New_USBVersion_Notifications.toString() == 'true' ? true : false) {
+    await check4_New_USB_Mode_Version()
+  }
 
   console.warn({ Message: `Initializing ${module.name.replace('./', '')} macro...` })
 
   psuedoConfig = cloneConfig()
 
   const checkOs4_minumum_os_compatabilty = check4_Minimum_Version_Required('9.15.0.0')
-  const checkOs4_microphone_Output_Mode_compatability = check4_Minimum_Version_Required('10.15.3.0')
+  const checkOs4_microphone_Output_Mode_compatability = check4_Minimum_Version_Required('10.17.1.0')
 
   await GMM.memoryInit()
   status = await GMM.read('status').catch(e => { console.debug(e); GMM.write('status', baseMemoryState); return baseMemoryState })
@@ -273,13 +277,23 @@ GMM.Event.Receiver.on(event => {
             if (event.Value?.EditMatrixOutput) {
               if (psuedoConfig.matrix_Camera_Mode.toString() == 'true' ? true : false) {
                 lastKnownMain = event.Value.EditMatrixOutput.sources
-                console.log(event)
                 updateMatrixModeSelfview(true, event.Value.EditMatrixOutput.sources)
               }
             }
             if (event.Value?.AlterUSBConfig) {
-              console.warn({ Message: `Configuration change issued by [${event.App}]`, Config: event.Value.AlterUSBConfig.config, PreviousValue: psuedoConfig[event.Value.AlterUSBConfig.config], NewValue: event.Value.AlterUSBConfig.value })
-              psuedoConfig[event.Value.AlterUSBConfig.config] = event.Value.AlterUSBConfig.value
+              switch (event.Value.AlterUSBConfig.config) {
+                case 'hideCustomPanels_inUSBMode_PanelIds': case 'hideCustomPanels_inWebexMode_PanelIds': case 'reporting_Users': case 'reporting_Rooms':
+                  const prevVal = psuedoConfig[event.Value.AlterUSBConfig.config].clone()
+                  event.Value.AlterUSBConfig.value.forEach(element => {
+                    psuedoConfig[event.Value.AlterUSBConfig.config].push(element)
+                  })
+                  console.warn({ Message: `Configuration change issued by [${event.App}]`, Config: event.Value.AlterUSBConfig.config, PreviousValue: prevVal, NewValue: psuedoConfig[event.Value.AlterUSBConfig.config] })
+                  break;
+                default:
+                  console.warn({ Message: `Configuration change issued by [${event.App}]`, Config: event.Value.AlterUSBConfig.config, PreviousValue: psuedoConfig[event.Value.AlterUSBConfig.config], NewValue: event.Value.AlterUSBConfig.value })
+                  psuedoConfig[event.Value.AlterUSBConfig.config] = event.Value.AlterUSBConfig.value
+                  break;
+              }
             }
           } else if (typeof event.Value == 'string') {
             switch (event.Value) {
@@ -300,6 +314,15 @@ GMM.Event.Receiver.on(event => {
             }
           }
           break;
+        case 'Status':
+          switch (event.Value) {
+            case 'get_USBModeConfig':
+              InterMacro_Message.status({ USBModeConfig: psuedoConfig }).post()
+              break;
+            default:
+              break;
+          }
+          break;
         default:
           break;
       }
@@ -308,9 +331,11 @@ GMM.Event.Receiver.on(event => {
 })
 
 //Once per day, midnight local time, check to see if a new USB mode version exists
-GMM.Event.Schedule.on('00:00', () => {
-  check4_New_USB_Mode_Version()
-})
+if (check4_New_USBVersion_Notifications.toString() == 'true' ? true : false) {
+  GMM.Event.Schedule.on('00:00', () => {
+    check4_New_USB_Mode_Version()
+  })
+}
 
 //Listens for changes on the Video Monitors config
 //Disables USB mode if this is switched back to Auto as it's not supported
@@ -422,6 +447,7 @@ Object.prototype.clone = Array.prototype.clone = function () {
 
 function cloneConfig() {
   let cloneConfig = {
+    check4_New_USBVersion_Notifications: check4_New_USBVersion_Notifications.clone(),
     usbWelcomePrompt: usbWelcomePrompt.clone(),
     hideCustomPanels_inUSBMode: hideCustomPanels_inUSBMode.clone(),
     hideCustomPanels_inUSBMode_PanelIds: hideCustomPanels_inUSBMode_PanelIds.clone(),
@@ -692,7 +718,7 @@ async function noSignalDisconnectUSBmode() {
   if (status.state == 'USB_Mode') {
     load.Webex_Mode('No Source Input signal detected')
     if (USB_Mode_Uptime < 16) {
-      await xapi.Command.UserInterface.Message.Alert.Display( {
+      await xapi.Command.UserInterface.Message.Alert.Display({
         Title: missingSourceText_Title,
         Text: missingSourceText_Text,
         Duration: missingSourceText_Duration
@@ -850,7 +876,7 @@ async function check4_Minimum_Version_Required(minimumOs) {
 async function check4_Script_State(activeMode) {
   console.log({ Message: `${module.name.replace('./', '')} last known state: ${activeMode}. Prepping UI for ${activeMode}` })
   await buildPanels()
-  await load[activeMode](`${module.name.replace('./', '')} macro initialized`, true)
+  await swapUIto(activeMode)
 }
 
 //Checks to see if Ce-Console is available and contains the USB Mode Output Group
@@ -900,11 +926,11 @@ async function check4_New_USB_Mode_Version() {
       console.debug({ Message: 'Comparing against available USB Mode Version on git', Installed: { Version: version, Value: currentBase }, Available: { Version: manifest.MacroVersion, Value: compareBase } })
       if (compareBase > currentBase) {
         console.info({ News: `A New Version of USB Mode is available for download at https://roomos.cisco.com/macros`, CurrentVersion: version, NewVersion: manifest.MacroVersion })
+        await sendReport({ News: `A New Version of USB Mode is available for download at https://roomos.cisco.com/macros`, CurrentVersion: version, NewVersion: manifest.MacroVersion }, 'Info')
       }
     } else {
       error.report('USB Mode Manifest File missing Macro Version Object', 'Unable to verify version available on RoomOs Git Repository', 'No action taken, however, be sure to check the RoomOs website for updates on USB Mode')
     }
-
   } catch (e) {
     error.report(`Failed USB Mode Version Check >> ${e.message}`, 'Unable to connect to the RoomOs Git Repository to compare this version of USB mode to what is currently available', 'No action taken, however, be sure to check the RoomOs website for updates on USB Mode')
   }
@@ -1079,12 +1105,13 @@ async function setupReporting() {
 
 //Used to send reports out to Webex Spaces id enabled
 async function sendReport(details, type = 'N/A') {
+  const msg = `\n- - -\n# USB Mode Report\n### Type: ${type}\n**[ Details ]**\n\`\`\`\n${JSON.stringify(details, null, 2)}\n\`\`\``;
   if (psuedoConfig.reporting_Mode.toString() == 'true' ? true : false) {
     if (report.userGroup.active) {
-      await report.userGroup.message.body(`\n- - -\n# USB Mode Report\n### Type: ${type}\n**[ Details ]**\n\`\`\`\n${JSON.stringify(details, null, 2)}\n\`\`\``).post()
+      await report.userGroup.message.body(msg).post()
     }
     if (report.roomGroup.active) {
-      await report.roomGroup.message.body(`\`\`\`\n${JSON.stringify(details, null, 2)}\n\`\`\``).post()
+      await report.roomGroup.message.body(msg).post()
     }
   }
 }
