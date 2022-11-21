@@ -12,7 +12,8 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
   
 ## Requirements
 * Minimum RoomOS version 10.17.1   
-* OS11 preview mode disabled  
+* If running RoomOS 11 , minimum version is 11.0.0.4  
+* Codec Pro with QuadCam or SpeakerTrack 60 camera array on each room (SP60 support is experimental)
 
 ## Installation/Configuration  
 
@@ -46,12 +47,12 @@ Once you have installed join_split_base.js in both the Primary and Secondary cod
 
 IMPORTANT: Turn on the join_split_base macro on the Primary codec before turning it on in Secondary to give the macro a chance to set PIN 4 to the correct Join/Split state according to what is stored in permanent storage.  Also, turn on only the join_split_base macro on each codec.  DO NOT turn on the GMM_Lib macro, it is just a library included by the other two.
 
-NOTE: The macro will retrieve the setting for Video Monitors from each codec to validate it is not set to an illegal value (Auto, Triple or TriplePresentationOnly). After passing that validation, it will store it persistently in the Memory_Storage macro to properly handle join/split operations. If you decide you need to change the Video Monitor Settings on the codecs after initial installation, stop the join_split_base macro on both codecs, delete the Memory_Storage and then make the configuration change in the codec web interface. After that, perform initial setup again.  
+NOTE: The macro will retrieve the setting for Video Monitors from each codec to validate it is not set to an illegal value (Auto, Triple or TriplePresentationOnly). After passing that validation, it will store it persistently in the Memory_Storage macro to properly handle join/split operations. If you decide you need to change the Video Monitor Settings on the codecs after initial installation, switch the rooms to split mode, stop the join_split_base macro on both codecs, delete the Memory_Storage and then make the configuration change in the codec web interface. After that, perform initial setup again.  
 
 
 ## Usage  
 
-The macros are running and have done the initial configuration, you can switch room configurations from joined/combined to split/standalone by either triggering the wall switch with the divider wall between them or manually on the Touch10 or Navigator associated to the Primary codec as per configuration of the USE_WALL_SENSOR constant in join_split_base.js of the Primary codec.  
+Once the macros are running and have done the initial configuration, you can switch room configurations from joined/combined to split/standalone by either triggering the wall switch with the divider wall between them or manually on the Touch10 or Navigator associated to the Primary codec as per configuration of the USE_WALL_SENSOR constant in join_split_base.js of the Primary codec.  
 
 To trigger the automatic switching behavior between rooms when combined, either connec to a call or manually turn on SpeakerTrack on the quadcam.  
 
@@ -61,7 +62,8 @@ During a call, you can use the Auto Q&A custom panel button to turn on Presenter
 
 The macro works when used in combination with the USB Mode v3 macro. Please note that when in USB Mode, you cannot combine or split rooms until you exit out of that mode.  
 
-NOTE: WebRTC support (i.e. calls to Google Meet) in this macro is "experimental" due to lack of full support for camera swtiching when WebRTC calls. The switching in this is accomplished by temporarily muting video, switching and then turning back on with a 1.5 second delay so you will experience a blank screen being sent to the other end during that switching. Please note that if you turn off automation manually by turning off Speakertrack while in a WebRTC call, even if you select a different camera it will not be sent automatically to the other side since the "workaround" of muting for 1.5 seconds is disabled when the macro is not in automatic switching mode. In this situation, you must manually select the new camera to use, mute the outgoing video using the Touch 10 button, wait at least 1.5 seconds and then Un-mute the video also on the Touch10 button.  
+NOTE: WebRTC support in RoomOS 10 (i.e. calls to Google Meet) in this macro is "experimental" due to lack of full support for camera swtiching when WebRTC calls. The switching in this is accomplished by temporarily muting video, switching and then turning back on with a 1.5 second delay so you will experience a blank screen being sent to the other end during that switching. Please note that if you turn off automation manually by turning off Speakertrack while in a WebRTC call, even if you select a different camera it will not be sent automatically to the other side since the "workaround" of muting for 1.5 seconds is disabled when the macro is not in automatic switching mode. In this situation, you must manually select the new camera to use, mute the outgoing video using the Touch 10 button, wait at least 1.5 seconds and then Un-mute the video also on the Touch10 button.  
+For RoomOS 11 Beta, there is full support for camera switching in WebRTC calls without the delays described above, but it still cannot compose two video inputs side by side in overview moder or in Presenter QA mode so in those situations the macro will just send one video input.  
 
 
 # Screenshots

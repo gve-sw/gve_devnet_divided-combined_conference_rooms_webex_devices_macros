@@ -26,6 +26,9 @@ and future Ducker and USBMode modules via events on the same codec and across co
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 */
 
+const minOS10Version='10.17.1.0';
+const minOS11Version='11.0.0.4';
+
 /*
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 + SECTION 1 - SECTION 1 - SECTION 1 - SECTION 1 - SECTION 1 - SECTION 1 +
@@ -43,9 +46,10 @@ const JS_PRIMARY=1, JS_SECONDARY=2, JS_NONE=0
 // For PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT , set to true if you would like the codec to show the video input
 // from tieline from secondary codec on the right when composing the image and that matches the layout of your combined room. 
 // If you need to reverse this, set it to false. 
-// For OTHER_CODEC_IP and the USER and PWD fields, if you filled in ROOM_ROLE : JS_PRIMARY, then you would enter the IP address 
-// and admin account credentials for the Secondary Codec.  If you filled in ROOM_ROLE : JS_SECONDARY, then you would enter the 
-// IP address and admin account credentials for the Primary Codec.
+// For OTHER_CODEC_IP , if you filled in ROOM_ROLE : JS_PRIMARY, then you would enter the IP address 
+//  the Secondary Codec.  If you filled in ROOM_ROLE : JS_SECONDARY, then you would enter the 
+// IP address for the Primary Codec. The macro will prompt you for account credentials to connect to the other codec
+// on the associated Touch10 or Navigator device upon initial setup. 
 // Instructions for creating these admin accounts are in the "Installation Instructions" document.
 const JOIN_SPLIT_CONFIG = {
   ROOM_ROLE : JS_PRIMARY,
@@ -131,7 +135,9 @@ General microphones and video sources
 // NOTE: In this list, use only the actual microphone inputs that you are using for switching. You do NOT have to list all 8 microphone inputs.
 const MICROPHONE_CONNECTORS = [1,2,3,4,5,6,7,8];
 
-const QUAD_CAM_ID=1;
+const QUAD_CAM_ID=1; // set to 0 if using SP60
+const SP60_CAM_LEFT_ID=0; // set to 0 if using QuadCam
+const SP60_CAM_RIGHT_ID=0; // set to 0 if using QuadCam
 const OVERVIEW_SINGLE_SOURCE_ID = 1;
 
 
@@ -320,8 +326,13 @@ let secondaryOnline = false;
 
 let PRESENTER_QA_MODE = false
 
+let ST_ACTIVE_CONNECTOR=0;
+
 let macroTurnedOnST = false;
 let macroTurnedOffST = false;
+
+let isOSTen=false;
+let isOSEleven=false;
 
 // Initial check for the Video Monitor configuration
 async function check4_Video_Monitor_Config() {
@@ -335,6 +346,28 @@ async function check4_Video_Monitor_Config() {
   })
 }
 
+async function getPresetCamera(prID) {
+  const value =  await xapi.Command.Camera.Preset.Show({ PresetId: prID });
+  return(value.CameraId)
+}
+
+async function check4_Minimum_Version_Required(minimumOs) {
+  const reg = /^\D*(?<MAJOR>\d*)\.(?<MINOR>\d*)\.(?<EXTRAVERSION>\d*)\.(?<BUILDID>\d*).*$/i;
+  const minOs = minimumOs; 
+  const os = await xapi.Status.SystemUnit.Software.Version.get();
+  console.log(os)
+  const x = (reg.exec(os)).groups; 
+  const y = (reg.exec(minOs)).groups;
+  if (parseInt(x.MAJOR) > parseInt(y.MAJOR)) return true; 
+  if (parseInt(x.MAJOR) < parseInt(y.MAJOR)) return false; 
+  if (parseInt(x.MINOR) > parseInt(y.MINOR)) return true; 
+  if (parseInt(x.MINOR) < parseInt(y.MINOR)) return false; 
+  if (parseInt(x.EXTRAVERSION) > parseInt(y.EXTRAVERSION)) return true; 
+  if (parseInt(x.EXTRAVERSION) < parseInt(y.EXTRAVERSION)) return false; 
+  if (parseInt(x.BUILDID) > parseInt(y.BUILDID)) return true; 
+  if (parseInt(x.BUILDID) < parseInt(y.BUILDID)) return false; 
+  return false;
+} 
 
 /**
   * The following functions allow the ability to set the Pins High or Low
@@ -383,6 +416,22 @@ function setWallSensorOverride(overrideValue) {
     console.log({ Message: 'ChangeState', Action: 'Wall Sensor Override state stored.' })
   })
 
+}
+
+function getSTCameraID() {
+  let theResult=1;
+  if (ST_ACTIVE_CONNECTOR!=0) {
+    theResult=ST_ACTIVE_CONNECTOR;
+  }
+  else
+  { // if the codec has not reported the current active connector, we will use whatever
+    // was configured in the macro for the ID of the speakertracking camera
+    if (QUAD_CAM_ID!=0) theResult=QUAD_CAM_ID;
+      else if (SP60_CAM_LEFT_ID!=0) theResult=SP60_CAM_LEFT_ID; // we can only guess which of the SP60 cameras is active, so try the left one first
+      else if (SP60_CAM_RIGHT_ID!=0) theResult=SP60_CAM_RIGHT_ID; // of left SP60 camera not specified, we try the right one. 
+      else console.warn('No speaker tracking connector IDs where specified!! Defaulting to 1') // if not thing was configured, set to one but give a warning
+  }
+  return theResult;
 }
 
 async function storeSecondarySettings(ultraSoundMaxValue,wState,sState) {
@@ -919,10 +968,10 @@ function stopAutomation() {
          /*
          console.log("Switching to MainVideoSource connectorID 1 ...");
          //pauseSpeakerTrack(); // in case it is turned on so we can switch video sources
-         if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
+         if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
          xapi.Command.Video.Input.SetMainVideoSource({ SourceId: 1});
          lastSourceDict={ SourceId: 1};
-         if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+         if (webrtc_mode && !isOSEleven) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
          //resumeSpeakerTrack(); // in case speaker track is active so we turn off BG mode.
          */
          // using proper way to de-register handlers
@@ -998,7 +1047,8 @@ async function makeCameraSwitch(input, average) {
   // first figure out if the loudest mic is from the secondary mic input or local
   // to select video tie line from secondary or local quadcam correspondigly
   // if this is the secondary, it will always select the local quadcam
-  var selectedSource = (input==JOIN_SPLIT_CONFIG.PRIMARY_AUDIO_TIELINE_INPUT_FROM_SEC_ID) ? JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID : QUAD_CAM_ID;
+  var currentSTCameraID=getSTCameraID();
+  var selectedSource = (input==JOIN_SPLIT_CONFIG.PRIMARY_AUDIO_TIELINE_INPUT_FROM_SEC_ID) ? JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID : currentSTCameraID;
   let sourceDict={ SourceID : '0'}
   sourceDict["SourceID"]=selectedSource.toString();
 
@@ -1012,7 +1062,7 @@ async function makeCameraSwitch(input, average) {
   }
   else if (JSON.stringify(lastSourceDict) != JSON.stringify(sourceDict))
   {
-      if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
+      if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
 
       inSideBySide=false;
       
@@ -1025,7 +1075,7 @@ async function makeCameraSwitch(input, average) {
       xapi.command('Video Input SetMainVideoSource', sourceDict).catch(handleError);
       lastSourceDict=sourceDict;
 
-      if ( selectedSource==QUAD_CAM_ID ) {
+      if ( selectedSource==currentSTCameraID ) { //TODO: Check here
         // reactivate SpeakerTrack if switching to a quadcam.
       resumeSpeakerTrack();
       }
@@ -1034,7 +1084,7 @@ async function makeCameraSwitch(input, average) {
       if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY && roomCombined) sendIntercodecMessage('automatic_mode');
       lastActiveHighInput = input;
       restartNewSpeakerTimer();
-      if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+      if (webrtc_mode && !isOSEleven) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 
   }
 }
@@ -1078,7 +1128,7 @@ async function presenterQASwitch(input, selectedSource) {
 
 function setComposedQAVideoSource(connectorDict) {
  
-  if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
+  if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
   
   // always put speakertrack on background mode when switching around inputs 
   pauseSpeakerTrack();
@@ -1095,10 +1145,10 @@ function setComposedQAVideoSource(connectorDict) {
   }, 250) //250ms delay to allow the main source to resolve first
 
   // only disable background mode if the audience camera is a QuadCam
-  if (connectorDict.ConnectorId[1]==QUAD_CAM_ID) resumeSpeakerTrack();
+  if (connectorDict.ConnectorId[1]==getSTCameraID()) resumeSpeakerTrack(); //TODO: Check here
 
-  //if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Unmute();
-  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+  //if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Unmute();
+  if (webrtc_mode && !isOSEleven) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 
 }
 
@@ -1129,7 +1179,7 @@ function averageArray(arrayIn) {
 async function recallSideBySideMode() {
   if (!manual_mode && roomCombined) {
     inSideBySide=true;
-    if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
+    if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
     // only invoke SideBySideMode if not in presenter QA mode and not presentertrack is currently not active
     // because Presenter QA mode has it's own way of composing side by side. 
     if (presenterTracking ) {
@@ -1176,7 +1226,7 @@ async function recallSideBySideMode() {
       lastActiveHighInput = 0;
       lowWasRecalled = true;
     }
-    if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+    if (webrtc_mode && !isOSEleven) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
   }
 }
 
@@ -1186,25 +1236,26 @@ async function recallFullPresenter() {
   // so we need to pause it in case the we were doing full composition to be able to switch
   // to just the presenter camera
   pauseSpeakerTrack();
-  if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
+  if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
 
   let presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
   console.log("Obtained presenter source as: ", presenterSource)
   let connectorDict={ ConnectorId : presenterSource};
   xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
   lastSourceDict=connectorDict;
-  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+  if (webrtc_mode && !isOSEleven) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
   //resumeSpeakerTrack(); // we do not want to leave background mode on
 }
 
 async function recallQuadCam() {
   console.log("Recalling QuadCam after manually exiting PresenterTrack mode....")
   pauseSpeakerTrack();
-  if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
-  let connectorDict={ SourceId: QUAD_CAM_ID};
-  xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
+  if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
+  let currentSTCameraID=getSTCameraID();
+  console.log('In recallQuadCam Obtained currentSTCameraID as: ',currentSTCameraID)
+  let connectorDict={ SourceId: currentSTCameraID};  xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
   lastSourceDict=connectorDict;
-  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+  if (webrtc_mode && !isOSEleven) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
   resumeSpeakerTrack(); // we do not want to leave background mode on
 
 
@@ -1763,7 +1814,7 @@ async function init_switching() {
     xapi.Event.CallSuccessful.on(async () => {
 
       console.log("Starting new call timer...");
-      webrtc_mode=false; // just in case we do not get the right event when ending webrtc calls
+      //webrtc_mode=false; // just in case we do not get the right event when ending webrtc calls
       startAutomation();
       recallSideBySideMode();
       startInitialCallTimer();
@@ -1785,6 +1836,7 @@ async function init_switching() {
       if (!usb_mode) {
         console.log("Turning off Self View....");
         xapi.Command.Video.Selfview.Set({ Mode: 'off'});
+        webrtc_mode=false; // ending webrtc calls is being notified here now in RoomOS11
         stopAutomation();
       }
 
@@ -1800,12 +1852,12 @@ async function init_switching() {
     });
 
     // register WebRTC Mode
-    xapi.Status.UserInterface.WebView[1].Type
+    xapi.Status.UserInterface.WebView.Type
     .on(async(value) => {
       if (value==='WebRTCMeeting') {
         webrtc_mode=true;
 
-        console.log("Starting new call timer...");
+        console.log("Starting automation due to WebRTCMeeting event...");
         startAutomation();
         startInitialCallTimer();
           
@@ -1822,7 +1874,7 @@ async function init_switching() {
       } else {
         webrtc_mode=false;
         if (!usb_mode) {
-            console.log("Turning off Self View....");
+            console.log("Stopping automation due to a non-WebRTCMeeting  event...");
             xapi.Command.Video.Selfview.Set({ Mode: 'off'});
             stopAutomation();
           }
@@ -1843,7 +1895,7 @@ async function init_switching() {
     xapi.Status.Video.Input.MainVideoSource
     .on(async (value) => {
       //console.log(value);
-      if (webrtc_mode) {
+      if (webrtc_mode && !isOSEleven) {
         console.log('Video switched... unmuting from handler..');
         await xapi.Command.Video.Input.MainVideo.Unmute();
       }
@@ -1875,12 +1927,13 @@ async function init_switching() {
     if (roomCombined){
       if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY) {
           overviewShowDouble=true;
+          let thePresetCamID=await getPresetCamera(30);
           if (JOIN_SPLIT_CONFIG.PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT) {
-              OVERVIEW_DOUBLE_SOURCE_IDS = [QUAD_CAM_ID,JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID];
+              OVERVIEW_DOUBLE_SOURCE_IDS = [parseInt(thePresetCamID),JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID];
             } 
             else 
             {
-              OVERVIEW_DOUBLE_SOURCE_IDS = [JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID,QUAD_CAM_ID];
+              OVERVIEW_DOUBLE_SOURCE_IDS = [JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID,parseInt(thePresetCamID)];
             }
       }
       else if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_SECONDARY) {
@@ -1910,7 +1963,7 @@ async function init()
   try {
     await check4_Video_Monitor_Config()
   } catch (e) {
-    let message = { Error: 'JoinSplit macro disabled', Message: 'The configuration "Video Monitors" set to Auto, Triple or TriplePresentationOnly is not allowed because JoinSplit will not work correctly. Follow the step-by-step instructions for configuring your codec web interface with manual monitor values and try again.. ' }
+    let message = { Error: 'JoinSplit macro disabled', Message: 'The configuration "Video Monitors" set to Auto, Triple or TriplePresentationOnly is not allowed. Please try again.. ' }
     monitorOnAutoError(message);
   }
 
@@ -1921,6 +1974,11 @@ async function init()
     });
 
   await init_intercodec(); 
+      
+  // check RoomOS versions
+  isOSTen=await check4_Minimum_Version_Required(minOS10Version);
+  isOSEleven=await check4_Minimum_Version_Required(minOS11Version);
+  
 
   if (JOIN_SPLIT_CONFIG.ROOM_ROLE===JS_PRIMARY) {
 
@@ -2061,13 +2119,13 @@ async function handleWidgetActions(event)
           case '2':
               console.log('On');
               console.log("Turning on PresenterTrack only...");
-              if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
+              if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
               deactivateSpeakerTrack();
               presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
               connectorDict={ ConnectorId : presenterSource};
               xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
               lastSourceDict=connectorDict;
-              if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+              if (webrtc_mode && !isOSEleven) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
               xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' }); //TODO: Setting to Follow or Persistent both work, need to sort out which to keep
               PRESENTER_QA_MODE=false;
           break;
@@ -2075,7 +2133,7 @@ async function handleWidgetActions(event)
           case '3':
                 console.log('QA Mode');
                 console.log("Turning on PresenterTrack with QA Mode...");
-                if (webrtc_mode) xapi.Command.Video.Input.MainVideo.Mute();
+                if (webrtc_mode && !isOSEleven) xapi.Command.Video.Input.MainVideo.Mute();
                   activateSpeakerTrack();
                   //pauseSpeakerTrack();
                 presenterSource = await xapi.Config.Cameras.PresenterTrack.Connector.get();
@@ -2084,7 +2142,7 @@ async function handleWidgetActions(event)
                 lastSourceDict=connectorDict;
                 xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' }); //TODO: Setting to Follow or Persistent both work, need to sort out which to keep  
                   pauseSpeakerTrack();
-                  if (webrtc_mode) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
+                  if (webrtc_mode && !isOSEleven) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 
                 PRESENTER_QA_MODE=true;
                   //resumeSpeakerTrack();
@@ -2326,12 +2384,14 @@ async function primaryCombinedMode()
     // switcher actions to perform when primary combines
     overviewShowDouble=true;
     stopAutomation(); 
+    let thePresetCamID=await getPresetCamera(30);
+
     if (JOIN_SPLIT_CONFIG.PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT) {
-      OVERVIEW_DOUBLE_SOURCE_IDS = [QUAD_CAM_ID,JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID];
+      OVERVIEW_DOUBLE_SOURCE_IDS = [parseInt(thePresetCamID),JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID];
     } 
     else 
     {
-      OVERVIEW_DOUBLE_SOURCE_IDS = [JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID,QUAD_CAM_ID];
+      OVERVIEW_DOUBLE_SOURCE_IDS = [JOIN_SPLIT_CONFIG.PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID,parseInt(thePresetCamID)];
     }   
     recallSideBySideMode();   
     addCustomAutoQAPanel();
@@ -2515,6 +2575,18 @@ GMM.Event.Schedule.on('01:00', event => {
   }
 })
 
+xapi.Status.Cameras.SpeakerTrack.ActiveConnector.on(value => {
+      console.log('New Camera connector: ',value);
+      ST_ACTIVE_CONNECTOR=parseInt(value);
+      if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_SECONDARY && roomCombined) {
+        // need to send to primary codec the video input from the correct ST camera if it is
+        // an SP60. If a QuadCam, it will always be 1 and this event wont be firing other than when turning
+        // speakertracking on/off which for the secondary codec in combined mode should be only once when combining
+        let sourceIDtoMatrix=(ST_ACTIVE_CONNECTOR==0)? 1 : ST_ACTIVE_CONNECTOR;
+        xapi.command('Video Matrix Assign', { Output: JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID, SourceID: sourceIDtoMatrix }).catch((error) => { console.error(error); });
+      }
+});
+    
 
 xapi.event.on('UserInterface Message Prompt Response', (event) =>
 {
