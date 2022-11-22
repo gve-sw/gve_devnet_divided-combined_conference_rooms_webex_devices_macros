@@ -62,8 +62,8 @@ const JOIN_SPLIT_CONFIG = {
   OTHER_CODEC_IP : '10.0.0.100'
 }
 
-OTHER_CODEC_USERNAME='';
-OTHER_CODEC_PASSWORD='';
+const OTHER_CODEC_USERNAME='';
+const OTHER_CODEC_PASSWORD='';
 
 /*
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
