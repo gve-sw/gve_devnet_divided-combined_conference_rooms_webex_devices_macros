@@ -65,6 +65,9 @@ The macro works when used in combination with the USB Mode v3 macro. Please note
 NOTE: WebRTC support in RoomOS 10 (i.e. calls to Google Meet) in this macro is "experimental" due to lack of full support for camera swtiching when WebRTC calls. The switching in this is accomplished by temporarily muting video, switching and then turning back on with a 1.5 second delay so you will experience a blank screen being sent to the other end during that switching. Please note that if you turn off automation manually by turning off Speakertrack while in a WebRTC call, even if you select a different camera it will not be sent automatically to the other side since the "workaround" of muting for 1.5 seconds is disabled when the macro is not in automatic switching mode. In this situation, you must manually select the new camera to use, mute the outgoing video using the Touch 10 button, wait at least 1.5 seconds and then Un-mute the video also on the Touch10 button.  
 For RoomOS 11 Beta, there is full support for camera switching in WebRTC calls without the delays described above, but it still cannot compose two video inputs side by side in overview moder or in Presenter QA mode so in those situations the macro will just send one video input.  
 
+NOTE: If using WebRTC calls with RoomOS 11, do not configure microphone 1 since, as of RoomOS version 11.0.0.4 , we do not get VuMeter events for microphone 1 when in WebRTC calls. 
+
+
 
 # Screenshots
 
