@@ -12,7 +12,7 @@ IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
 or implied.
 */
 
-const xapi = require('xapi');
+import xapi from 'xapi';
 import { GMM } from './GMM_Lib'
 
 /*
@@ -62,6 +62,8 @@ const JOIN_SPLIT_CONFIG = {
   OTHER_CODEC_IP : '10.0.0.100'
 }
 
+OTHER_CODEC_USERNAME='';
+OTHER_CODEC_PASSWORD='';
 
 /*
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -250,10 +252,11 @@ var otherCodec;
 //Run your init script asynchronously 
 async function init_intercodec() {
   try {
-    otherCodec = new GMM.Connect.IP(await GMM.ReadAuth('otherCodec', 'IP'), '', JOIN_SPLIT_CONFIG.OTHER_CODEC_IP)
+    //otherCodec = new GMM.Connect.IP(await GMM.ReadAuth('otherCodec', 'IP'), '', JOIN_SPLIT_CONFIG.OTHER_CODEC_IP)
+    otherCodec = new GMM.Connect.IP( OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, JOIN_SPLIT_CONFIG.OTHER_CODEC_IP)
   } catch (e) {
     console.error(e)
-    otherCodec = new GMM.Connect.IP(await GMM.CaptureAuth('otherCodec', 'IP'), '', JOIN_SPLIT_CONFIG.OTHER_CODEC_IP)
+    //otherCodec = new GMM.Connect.IP(await GMM.CaptureAuth('otherCodec', 'IP'), '', JOIN_SPLIT_CONFIG.OTHER_CODEC_IP)
   }
   // console.log(otherCodec) 
 }
