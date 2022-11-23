@@ -745,6 +745,10 @@ async function setSecondaryDefaultConfig() {
 
   console.log("Secondary default config being run");
 
+  // no longer will we store the VideoMonitors settings and others below when
+  // setting default config since that was storing wrong values when initializing in combined mode.
+  // we only store them when we are going to combined Mode to keep track of what they were initially when split
+  /*
     //grab current secondary settings to store away in GMM  
     let ultraSoundMaxValue = await xapi.Config.Audio.Ultrasound.MaxVolume.get()
     let standbyWakeupMotionValue=await xapi.Config.Standby.WakeupOnMotionDetection.get()
@@ -753,7 +757,7 @@ async function setSecondaryDefaultConfig() {
     // store it them in persistent storage, this also reads 
     // current JoinSplit_secondary_settings.VideoMonitors from codec
    await storeSecondarySettings(ultraSoundMaxValue, standbyWakeupMotionValue, standbyControlValue);
-  
+  */
 
   xapi.config.set('Audio Input ARC 1 Mode', 'Off')
     .catch((error) => { console.error("1"+error); });
@@ -825,8 +829,8 @@ async function setSecondaryDefaultConfig() {
 // VIDEO
 xapi.config.set('Video DefaultMainSource', '1')
     .catch((error) => { console.error("50"+error); });
-  xapi.config.set('Video Monitors', JoinSplit_secondary_settings.VideoMonitors)
-    .catch((error) => { console.error("51"+error); });
+  //xapi.config.set('Video Monitors', JoinSplit_secondary_settings.VideoMonitors)
+  //  .catch((error) => { console.error("51"+error); });
   xapi.command('Video Input SetMainVideoSource', {  ConnectorID: 1 })
     .catch((error) => { console.error("52"+error); });
 
@@ -892,6 +896,7 @@ xapi.config.set('Video DefaultMainSource', '1')
 
 // VIDEO OUTPUT SECTION
 // THESE SHOULD NOT BE CONFIGURED BY THE INSTALLER
+JoinSplit_secondary_settings.VideoMonitors=await xapi.Config.Video.Monitors.get()
 
   switch (JoinSplit_secondary_settings.VideoMonitors) {
     case 'Dual':
@@ -921,13 +926,19 @@ xapi.config.set('Video DefaultMainSource', '1')
 // START/STOP AUTOMATION FUNCTIONS
 /////////////////////////////////////////////////////////////////////////////////////////
 
-function startAutomation() {
+async function startAutomation() {
   console.log('startAutomation');
   
    //setting overall manual mode to false
    manual_mode = false;
    allowCameraSwitching = true;
 
+   try {
+        const webViewType = await xapi.Status.UserInterface.WebView.Type.get()
+        if (webViewType=='WebRTCMeeting') webrtc_mode=true;
+       } catch (e) {
+         console.log('Unable to read WebView Type.. assuming not in webrtc mode')
+       }
 
     // Always turn on SpeakerTrack when the Automation is started. It is also turned on when a call connects so that
     // if it is manually turned off while outside of a call it goes back to the correct state
@@ -1963,18 +1974,21 @@ async function init()
 {
   console.log('init');
 
-  try {
-    await check4_Video_Monitor_Config()
-  } catch (e) {
-    let message = { Error: 'JoinSplit macro disabled', Message: 'The configuration "Video Monitors" set to Auto, Triple or TriplePresentationOnly is not allowed. Please try again.. ' }
-    monitorOnAutoError(message);
-  }
-
   await GMM.memoryInit();
 
   await GMM.write.global('JOIN_SPLIT_CONFIG', JOIN_SPLIT_CONFIG).then(() => {
       console.log({ Message: 'Init', Action: 'Join Split config stored.' })
     });
+
+
+  roomCombined=await GMM.read.global('JoinSplit_combinedState').catch(async e=>{
+      //console.error(e);
+      console.log("No initial JoinSplit_combinedState global detected, creating one...")
+      await GMM.write.global('JoinSplit_combinedState',false).then(() => {
+        console.log({ Message: 'Init', Action: 'Combined state stored.' })
+      })
+      return false;
+    })
 
   await init_intercodec(); 
       
@@ -1984,15 +1998,6 @@ async function init()
   
 
   if (JOIN_SPLIT_CONFIG.ROOM_ROLE===JS_PRIMARY) {
-
-            roomCombined=await GMM.read.global('JoinSplit_combinedState').catch(async e=>{
-              //console.error(e);
-              console.log("No initial JoinSplit_combinedState global detected, creating one...")
-              await GMM.write.global('JoinSplit_combinedState',false).then(() => {
-                console.log({ Message: 'Init', Action: 'Combined state stored.' })
-              })
-              return false;
-            })
 
             if (USE_WALL_SENSOR) {
               wallSensorOverride=await GMM.read.global('JoinSplit_wallSensorOverride').catch(async e=>{
