@@ -441,7 +441,8 @@ async function storeSecondarySettings(ultraSoundMaxValue,wState,sState) {
   JoinSplit_secondary_settings.UltrasoundMax=ultraSoundMaxValue;
   JoinSplit_secondary_settings.WakeupOnMotionDetection=wState;
   JoinSplit_secondary_settings.StandbyControl=sState;
-  JoinSplit_secondary_settings.VideoMonitors=await xapi.Config.Video.Monitors.get()
+  let currentVideoMonitors=await xapi.Config.Video.Monitors.get();
+  if (currentVideoMonitors!='Triple') JoinSplit_secondary_settings.VideoMonitors=currentVideoMonitors; // only store if going from split to combined
   await GMM.write.global('JoinSplit_secondary_settings',JoinSplit_secondary_settings).then(() => {
     console.log({ Message: 'ChangeState', Action: 'secondary settings for Ultrasound, WakeupOnMotionDetection , StandbyControl and VideoMonitors stored.' })
   });

@@ -47,7 +47,9 @@ Once you have installed join_split_base.js in both the Primary and Secondary cod
 
 IMPORTANT: Turn on the join_split_base macro on the Primary codec before turning it on in Secondary to give the macro a chance to set PIN 4 to the correct Join/Split state according to what is stored in permanent storage.  Also, turn on only the join_split_base macro on each codec.  DO NOT turn on the GMM_Lib macro, it is just a library included by the other two.
 
-NOTE: The macro will retrieve the setting for Video Monitors from each codec to validate it is not set to an illegal value (Auto, Triple or TriplePresentationOnly). After passing that validation, it will store it persistently in the Memory_Storage macro to properly handle join/split operations. If you decide you need to change the Video Monitor Settings on the codecs after initial installation, switch the rooms to split mode, stop the join_split_base macro on both codecs, delete the Memory_Storage and then make the configuration change in the codec web interface. After that, perform initial setup again.  
+NOTE: Never change the Video Monitors, Ultrasound MaxVolume, WakeupOnMotionDetection or StandbyControl settings  on the Secondary codec while in combined mode. These settings are stored when going from split to combined mode to restore once back in split mode so if you change them while combined the wrong settings could be stored away in persistent memory. The safest option is to set those on either codec only in split mode and while the macro is off.   
+
+NOTE: If using WebRTC calls with RoomOS 11, do not attempt to configure microphone 1 for the macro to use since, as of RoomOS version 11.0.0.4 , we do not get VuMeter events for microphone 1 when in WebRTC calls so the whole switching logic between rooms in combined mode is compromised.    
 
 
 ## Usage  
@@ -64,9 +66,6 @@ The macro works when used in combination with the USB Mode v3 macro. Please note
 
 NOTE: WebRTC support in RoomOS 10 (i.e. calls to Google Meet) in this macro is "experimental" due to lack of full support for camera swtiching when WebRTC calls. The switching in this is accomplished by temporarily muting video, switching and then turning back on with a 1.5 second delay so you will experience a blank screen being sent to the other end during that switching. Please note that if you turn off automation manually by turning off Speakertrack while in a WebRTC call, even if you select a different camera it will not be sent automatically to the other side since the "workaround" of muting for 1.5 seconds is disabled when the macro is not in automatic switching mode. In this situation, you must manually select the new camera to use, mute the outgoing video using the Touch 10 button, wait at least 1.5 seconds and then Un-mute the video also on the Touch10 button.  
 For RoomOS 11 Beta, there is full support for camera switching in WebRTC calls without the delays described above, but it still cannot compose two video inputs side by side in overview moder or in Presenter QA mode so in those situations the macro will just send one video input.  
-
-NOTE: If using WebRTC calls with RoomOS 11, do not configure microphone 1 since, as of RoomOS version 11.0.0.4 , we do not get VuMeter events for microphone 1 when in WebRTC calls. 
-
 
 
 # Screenshots
