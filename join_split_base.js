@@ -934,6 +934,15 @@ async function startAutomation() {
    manual_mode = false;
    allowCameraSwitching = true;
 
+   if (inSideBySide) {
+        var currentSTCameraID=getSTCameraID();
+        let sourceDict={ SourceID : '0'}
+        sourceDict["SourceID"]=currentSTCameraID.toString();
+        xapi.Command.Video.Input.SetMainVideoSource(sourceDict); 
+        inSideBySide=false;
+        console.log("cleared out side by side mode....")
+    }
+
    try {
         const webViewType = await xapi.Status.UserInterface.WebView.Type.get()
         if (webViewType=='WebRTCMeeting') webrtc_mode=true;
@@ -944,7 +953,10 @@ async function startAutomation() {
     // Always turn on SpeakerTrack when the Automation is started. It is also turned on when a call connects so that
     // if it is manually turned off while outside of a call it goes back to the correct state
     macroTurnedOnST=true;
-    xapi.Command.Cameras.SpeakerTrack.Activate().catch(handleError);
+    if (webrtc_mode) {
+      setTimeout(()=> {xapi.Command.Cameras.SpeakerTrack.Activate().catch(handleError)},2000) // in RoomOS11 Beta, if we do not delay turning on ST, something turns it back off
+    } else  xapi.Command.Cameras.SpeakerTrack.Activate().catch(handleError);
+    
 
    //registering vuMeter event handler
    micHandler();
@@ -978,8 +990,20 @@ async function startAutomation() {
 function stopAutomation() {
          //setting overall manual mode to true
          manual_mode = true;
+         stopSideBySideTimer();
+         stopNewSpeakerTimer();
+         stopInitialCallTimer();
          console.log("Stopping all VuMeters...");
          xapi.Command.Audio.VuMeter.StopAll({ });
+
+         if (inSideBySide) {
+            var currentSTCameraID=getSTCameraID();
+            let sourceDict={ SourceID : '0'}
+            sourceDict["SourceID"]=currentSTCameraID.toString();
+            xapi.Command.Video.Input.SetMainVideoSource(sourceDict); 
+            inSideBySide=false;
+            console.log("cleared out side by side mode....")
+          }
          /*
          console.log("Switching to MainVideoSource connectorID 1 ...");
          //pauseSpeakerTrack(); // in case it is turned on so we can switch video sources
@@ -1643,6 +1667,13 @@ function onInitialCallTimerExpired() {
   }
 }
 
+function stopInitialCallTimer() {
+  if (InitialCallTimer != null) {
+    clearTimeout(InitialCallTimer);
+    InitialCallTimer = null;
+  }
+}
+
 function startCompositionTimer() {
   if (qaCompositionTimer == null) {
     presenterQAKeepComposition=true;
@@ -1740,7 +1771,7 @@ function evalSpeakerTrack(value)
     {
       //if (macroTurnedOffST) {macroTurnedOffST=false;}
       //else {stopAutomation();}
-      if (!manual_mode && !inSideBySide) stopAutomation();
+      if (!manual_mode /*&& !inSideBySide*/) stopAutomation();
     }
  
 }
