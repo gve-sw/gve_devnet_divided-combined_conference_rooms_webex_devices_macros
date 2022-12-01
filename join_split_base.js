@@ -46,11 +46,14 @@ const JS_PRIMARY=1, JS_SECONDARY=2, JS_NONE=0
 // For PRIMARY_SIDE_BY_SIDE_TIELINE_INPUT_POSITION_RIGHT , set to true if you would like the codec to show the video input
 // from tieline from secondary codec on the right when composing the image and that matches the layout of your combined room. 
 // If you need to reverse this, set it to false. 
+// If you wired your rooms different from what is indicated in the Version_3_Two-way_System_Drawing.pdf document
+// you can modify the PRIMARY_AUDIO_TIELINE_INPUT_FROM_SEC_ID, SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID
+// SECONDARY_VIDEO_TIELINE_INPUT_M1_FROM_PRI_ID and SECONDARY_VIDEO_TIELINE_INPUT_M2_FROM_PRI_ID constants
+// to match your setup. 
 // For OTHER_CODEC_IP , if you filled in ROOM_ROLE : JS_PRIMARY, then you would enter the IP address 
-//  the Secondary Codec.  If you filled in ROOM_ROLE : JS_SECONDARY, then you would enter the 
-// IP address for the Primary Codec. The macro will prompt you for account credentials to connect to the other codec
-// on the associated Touch10 or Navigator device upon initial setup. 
-// Instructions for creating these admin accounts are in the "Installation Instructions" document.
+// the Secondary Codec.  If you filled in ROOM_ROLE : JS_SECONDARY, then you would enter the 
+// IP address for the Primary Codec. 
+
 const JOIN_SPLIT_CONFIG = {
   ROOM_ROLE : JS_PRIMARY,
   PRIMARY_VIDEO_TIELINE_INPUT_FROM_SEC_ID: 3, // change only for non-standard singe screen setups
@@ -62,6 +65,17 @@ const JOIN_SPLIT_CONFIG = {
   OTHER_CODEC_IP : '10.0.0.100'
 }
 
+// If you fill out the OTHER_CODEC_USERNAME and OTHER_CODEC_PASSWORD with the credentials to be able to log
+// into the the Secondary codec (if configuring Primary) or Primary codec (if configuring Secondary)
+// they will be used to establish an HTTP connection with that other codec, but these credentials will be
+// stored clear text in the macro. 
+// If you leave OTHER_CODEC_USERNAME and OTHER_CODEC_PASSWORD blank, the macro will prompt you for 
+// account credentials to connect to the other codec on the associated Touch10 or Navigator device upon initial setup 
+// and store them very obfuscated in the generated macro called
+// memory_macro and therefore not easily accessible from a device backup.  
+// Instructions for creating these admin accounts are in the "Installation Instructions" document.
+// NOTED: At this time the mechanism to prompt for credentials is not workin on RoomOS 11 so please 
+// specify the credentials below if using that version of RoomOS
 const OTHER_CODEC_USERNAME='';
 const OTHER_CODEC_PASSWORD='';
 
@@ -84,7 +98,8 @@ const USE_WALL_SENSOR=false
 const WALL_SENSOR_COMBINED_STATE='Low'
 
 /*
-  Change the override protect PINs here if wanted and if USE_WALL_SENSOR=true above
+  If you set USE_WALL_SENSOR to true above, you can
+  change the override protect PINs here if needed.
 */
 const COMBINE_PIN = "1234";
 const SPLIT_PIN = "4321";
@@ -135,8 +150,15 @@ General microphones and video sources
 // Specify the input connectors associated to the microphones being used in the room
 // For example, if you set the value to [1,2,3,4,5,6,7,8] the macro will evaluate mic input id's 1-8 for its switching logic
 // NOTE: In this list, use only the actual microphone inputs that you are using for switching. You do NOT have to list all 8 microphone inputs.
+// NOTE: If using RoomOS11 beta, you might need to avoid using microphones connected to connector ID 1 if 
+// you plan on calling into WebRTC calls due to conflict that affects the use of the vuMeter
 const MICROPHONE_CONNECTORS = [1,2,3,4,5,6,7,8];
 
+// This macro supports one QuadCam or one SpeakerTrack 60 camera array on each the Primary or
+// secondary comment. Please specify below which one you are using and, if using the SP60 camera array,
+// specify in constant OVERVIEW_SINGLE_SOURCE_ID connector correspond to one of the 2 cameras to use for 
+// when showing an overview of the room. If using a QuadCam the value of OVERVIEW_SINGLE_SOURCE_ID should match 
+// the connector ID where the camera is connected. 
 const QUAD_CAM_ID=1; // set to 0 if using SP60
 const SP60_CAM_LEFT_ID=0; // set to 0 if using QuadCam
 const SP60_CAM_RIGHT_ID=0; // set to 0 if using QuadCam
@@ -159,10 +181,13 @@ const SIDE_BY_SIDE_TIME = 10000; // 10 seconds
 const NEW_SPEAKER_TIME = 2000; // 2 seconds
 // Time to wait before activating automatic mode at the beginning of a call
 const INITIAL_CALL_TIME = 15000; // 15 seconds
-// time to wait after setting a camera preset before switching to it's source to prevent
-// transmitting video during camera movement for P60 and PTZ cameras
-const VIDEO_SOURCE_SWITCH_WAIT_TIME = 500; // 500 ms
 
+// WEBRTC_VIDEO_UNMUTE_WAIT_TIME only applies to RoomOS version 10 since
+// have to to implement a woraround there to be able to switch cameras
+// while in a WebRTC call. Values less than 1500 ms do not seem to work, but
+// if you are having trouble getting switching to work in WebRTC calls you can increase
+// this value although that will affect the overall experience since during this time
+// the remote participants just see a black screen instead of the video feed.
 const WEBRTC_VIDEO_UNMUTE_WAIT_TIME=1500;
 
 // Microphone High/Low Thresholds
@@ -252,11 +277,13 @@ var otherCodec;
 //Run your init script asynchronously 
 async function init_intercodec() {
   try {
-    //otherCodec = new GMM.Connect.IP(await GMM.ReadAuth('otherCodec', 'IP'), '', JOIN_SPLIT_CONFIG.OTHER_CODEC_IP)
+    if (OTHER_CODEC_USERNAME=='' && OTHER_CODEC_PASSWORD=='')
+      otherCodec = new GMM.Connect.IP(await GMM.ReadAuth('otherCodec', 'IP'), '', JOIN_SPLIT_CONFIG.OTHER_CODEC_IP)
     otherCodec = new GMM.Connect.IP( OTHER_CODEC_USERNAME, OTHER_CODEC_PASSWORD, JOIN_SPLIT_CONFIG.OTHER_CODEC_IP)
   } catch (e) {
     console.error(e)
-    //otherCodec = new GMM.Connect.IP(await GMM.CaptureAuth('otherCodec', 'IP'), '', JOIN_SPLIT_CONFIG.OTHER_CODEC_IP)
+    if (OTHER_CODEC_USERNAME=='' && OTHER_CODEC_PASSWORD=='')
+      otherCodec = new GMM.Connect.IP(await GMM.CaptureAuth('otherCodec', 'IP'), '', JOIN_SPLIT_CONFIG.OTHER_CODEC_IP)
   }
   // console.log(otherCodec) 
 }
@@ -266,9 +293,6 @@ const localCallout = new GMM.Connect.Local(module.name.replace('./', ''))
 /////////////////////////////////////////////////////////////////////////////////////////
 // VARIABLES
 /////////////////////////////////////////////////////////////////////////////////////////
-
-
-//var inCall = false; //no longer needed since VoiceSwitch handles details of mic monitoring and switching while in call. 
 
 
 // roomCombined keeps the current state of join/split for the codec. It is normally also reflected in 
@@ -641,8 +665,7 @@ xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
 // CONFERENCE
   xapi.config.set('Conference AutoAnswer Mode', 'Off')
     .catch((error) => { console.error("31"+error); });
-  //xapi.config.set('Conference FarEndControl Mode', 'Off')
-  //  .catch((error) => { console.error("32"+error); });
+
 
 // GPIO
   xapi.config.set('GPIO Pin 1 Mode', 'InputNoAction')
@@ -718,10 +741,6 @@ xapi.config.set('Audio Input Microphone 8 Channel', 'Mono')
 
 // VIDEO OUTPUT SECTION
 // THESE SHOULD NOT BE CONFIGURED BY THE INSTALLER
-  //xapi.config.set('Video Output Connector 3 MonitorRole', 'Auto') 
-    //.catch((error) => { console.error("69"+error); }); //TODO: Check with Enrico on why we should care about this output setting on Primary
-    // Secondary Codec - Monitor 3 role must be set for THIRD
-
 
   JoinSplit_primary_settings.VideoMonitors=await xapi.Config.Video.Monitors.get()
   switch (JoinSplit_primary_settings.VideoMonitors) {
@@ -2151,8 +2170,7 @@ async function handleWidgetActions(event)
             //recallFullPresenter();
             xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Off' });
             PRESENTER_QA_MODE=false;
-            //TODO: test manually setting the camera back to the QuadCam in this scenario
-              activateSpeakerTrack(); //TODO validate
+              activateSpeakerTrack(); 
             recallQuadCam();
           break;
 
@@ -2166,7 +2184,7 @@ async function handleWidgetActions(event)
               xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
               lastSourceDict=connectorDict;
               if (webrtc_mode && !isOSEleven) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
-              xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' }); //TODO: Setting to Follow or Persistent both work, need to sort out which to keep
+              xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' }); 
               PRESENTER_QA_MODE=false;
           break;
 
@@ -2180,7 +2198,7 @@ async function handleWidgetActions(event)
                 connectorDict={ ConnectorId : presenterSource};
                 xapi.command('Video Input SetMainVideoSource', connectorDict).catch(handleError);
                 lastSourceDict=connectorDict;
-                xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' }); //TODO: Setting to Follow or Persistent both work, need to sort out which to keep  
+                xapi.Command.Cameras.PresenterTrack.Set({ Mode: 'Persistent' });   
                   pauseSpeakerTrack();
                   if (webrtc_mode && !isOSEleven) setTimeout( function(){xapi.Command.Video.Input.MainVideo.Unmute()} , WEBRTC_VIDEO_UNMUTE_WAIT_TIME);
 
@@ -2338,7 +2356,6 @@ function listenToMute() {
   xapi.Status.Audio.Microphones.Mute.on(value => {
     console.log("Global Mute: " + value);
     if(roomCombined === true){
-      //if(inCall === true) { //TODO: check to see if we can eliminate inCall checking
         if(value === 'On') {
           setGPIOPin2ToLow();
         }
@@ -2346,7 +2363,6 @@ function listenToMute() {
           setGPIOPin2ToHigh();
         }
       }
-    //}
   });
 }
 
@@ -2354,20 +2370,17 @@ function listenToStandby() {
   xapi.status.on('Standby State', (state) => {
     console.log("Standby State: " + state);
     if(roomCombined === true){
-      //if(inCall === false) { //TODO: check to see if we can eliminate inCall checking
         if(state === 'Standby') {
           setGPIOPin3ToLow();
         }
         else if (state === 'Off') {
           setGPIOPin3ToHigh();
         }
-      //}
     }
   });
 }
 
 function secondaryStandbyControl() {
-  //TODO: Make sure this does not conflict with switcher macro monitoring Standby
   xapi.status.on('GPIO Pin 3', (state) => {
     console.log(`GPIO Pin 3[${state.id}] State went to: ${state.State}`);
         if (state.State === 'Low') {
@@ -2380,7 +2393,6 @@ function secondaryStandbyControl() {
 }
 
 function secondaryMuteControl() {
-  //TODO: Make sure this does not conflict with switcher macro monitoring Mute
   xapi.status.on('GPIO Pin 2', (state) => {
     console.log(`GPIO Pin 2[${state.id}] State went to: ${state.State}`);
         if (state.State === 'Low') {
@@ -2403,8 +2415,7 @@ async function primaryCombinedMode()
     .catch((error) => { console.error(error); });
   xapi.config.set('Conference FarEndControl Mode', 'Off')
     .catch((error) => { console.error("32"+error); });
-//TODO: put command that would mirror Display 1 and 2 if they only have one screen and are using a direct tie line to
-// secondary instead of a splitter on HDMI outputs 1 and 2
+
 
 
   xapi.command('Video Matrix Reset').catch((error) => { console.error(error); }); 
@@ -2505,7 +2516,6 @@ async function secondaryStandaloneMode()
   if (JoinSplit_secondary_settings.VideoMonitors != '') {
     xapi.Config.Video.Monitors.set(JoinSplit_secondary_settings.VideoMonitors) 
     .catch((error) => { console.error(error); });
-      // TODO: Validate with Enrico the below settings for secondary default config.
       switch (JoinSplit_secondary_settings.VideoMonitors) {
         case 'Dual':
           xapi.Config.Video.Output.Connector[1].MonitorRole.set('First');
@@ -2525,7 +2535,6 @@ async function secondaryStandaloneMode()
   xapi.command('Conference DoNotDisturb Deactivate')
     .catch((error) => { console.error(error); });
   
-  //TODO: review why in some single screen setups command below is xapi.command('Video Matrix Reset', { Output: 1 })
   xapi.command('Video Matrix Reset').catch((error) => { console.error(error); }); 
   xapi.config.set('UserInterface OSD Mode', 'Auto').catch((error) => { console.error("90"+error); });
 
@@ -2541,8 +2550,7 @@ async function secondaryCombinedMode()
     .catch((error) => { console.error("91"+error); });
   xapi.config.set('Audio Output Line 5 Mode', 'On')
     .catch((error) => { console.error(error); });
-//TODO: if they use just one monitor and do a different mapping for video tieline, we need to make
-// ID of HDMIN input a configurable constant below
+
   xapi.config.set('Audio Input HDMI 3 Mode', 'On')
     .catch((error) => { console.error("5"+error); });
   xapi.Command.Video.Selfview.Set({ Mode: 'Off' });
@@ -2575,16 +2583,14 @@ async function secondaryCombinedMode()
 
   xapi.command('Conference DoNotDisturb Activate')
     .catch((error) => { console.error(error); });
-    //TODO: Check with Enrico.. if Single screen and using standard wiring (output to PRI via connector 3)
-    // does the 'Triple' setting work?
+
   if (JoinSplit_secondary_settings.VideoMonitors=='Single' && JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID==2) {
     xapi.Config.Video.Monitors.set('Dual');  
   }
   else 
   {
     xapi.Config.Video.Monitors.set('Triple');
-    //TODO: Check with Enrico: we might be if Single and JOIN_SPLIT_CONFIG.SECONDARY_VIDEO_TIELINE_OUTPUT_TO_PRI_SEC_ID==3, for example
-    // don't we need also to set monitor roles for this case?
+
   }
 
   xapi.command('Video Matrix Reset').catch((error) => { console.error(error); }); 

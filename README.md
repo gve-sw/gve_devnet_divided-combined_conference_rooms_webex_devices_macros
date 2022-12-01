@@ -45,6 +45,9 @@ In addition to handling configuration changes when combining or splitting rooms 
 
 Once you have installed join_split_base.js in both the Primary and Secondary codecs, edit as needed the constants in sections 1 through 6 of that file before turning on the macro.  
 
+Detailed instructions on each settings in those sections are provided in the macro itself in the form 
+of code comments.  
+
 IMPORTANT: Turn on the join_split_base macro on the Primary codec before turning it on in Secondary to give the macro a chance to set PIN 4 to the correct Join/Split state according to what is stored in permanent storage.  Also, turn on only the join_split_base macro on each codec.  DO NOT turn on the GMM_Lib macro, it is just a library included by the other two.
 
 NOTE: Never change the Video Monitors, Ultrasound MaxVolume, WakeupOnMotionDetection or StandbyControl settings  on the Secondary codec while in combined mode. These settings are stored when going from split to combined mode to restore once back in split mode so if you change them while combined the wrong settings could be stored away in persistent memory. The safest option is to set those on either codec only in split mode and while the macro is off.   
