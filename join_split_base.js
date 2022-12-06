@@ -2225,6 +2225,7 @@ xapi.event.on('UserInterface Extensions Panel Clicked', (event) =>
     if(event.PanelId == 'room_combine_PIN')
     {
       console.log("Room Combine PIN button clicked");
+      handleMacroStatus();
       xapi.command("UserInterface Message TextInput Display",
       {
         Title: "Wall Sensor Override Control",
