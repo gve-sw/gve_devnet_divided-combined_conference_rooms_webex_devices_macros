@@ -125,6 +125,17 @@ const COMBINED_PRESENTERTRACK_SETTINGS = {
   TRIGGERZONE: '0,89,549,898'
 } //Replace these placeholder values with your actual values.
 
+// USE_GMM_QUEUE specifies if we use the queueing functionality of the GMM library to 
+// minimize "no available http connections" errors. Set to true to queue http messages
+// rather than sending them right away. 
+const USE_GMM_QUEUE=false;
+
+// CHK_VUMETER_LOUDSPEAKER specifies if we check the LoudspeakerActivity flag from the VuMeter events
+// to ignore any microphone activity while the loudspeakers are active to reduce the possibility of
+// switching due to sound coming in from remote participants in the meeting if the AfterAEC setting
+// is not being effective. Set to true to perform the check for each microphone activity event. 
+const CHK_VUMETER_LOUDSPEAKER=false;
+
 /*
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 + SECTION 3 - SECTION 3 - SECTION 3 - SECTION 3 - SECTION 3 - SECTION 3 +
@@ -981,7 +992,7 @@ async function startAutomation() {
    micHandler();
    micHandler= () => void 0;
    micHandler=xapi.event.on('Audio Input Connectors Microphone', (event) => {
-    if (typeof micArrays[event.id[0]]!='undefined') {
+    if (typeof micArrays[event.id[0]]!='undefined' && ( !CHK_VUMETER_LOUDSPEAKER || event.LoudspeakerActivity<1)) {
       micArrays[event.id[0]].pop();
       micArrays[event.id[0]].push(event.VuMeter);
 
@@ -1278,7 +1289,7 @@ async function recallSideBySideMode() {
 
       // send side_by_side message to secondary if in combined mode
       if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY && roomCombined) {
-        if (otherCodec!='') otherCodec.status('side_by_side').post();
+        if (otherCodec!='') sendIntercodecMessage('side_by_side');
       }
       
       lastActiveHighInput = 0;
@@ -1442,7 +1453,7 @@ GMM.Event.Receiver.on(event => {
                     stopAutomation();
                     usb_mode= false;
                     // always tell the other codec when your are in or out of a call
-                    otherCodec.status('CALL_DISCONNECTED').post();
+                    sendIntercodecMessage('CALL_DISCONNECTED');
                     if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)
                     { 
                       // only need to keep track of codecs being in call with these
@@ -1460,7 +1471,7 @@ GMM.Event.Receiver.on(event => {
                     startAutomation();
                     usb_mode= true;
                     // always tell the other codec when your are in or out of a call
-                    otherCodec.status('CALL_CONNECTED').post();
+                    sendIntercodecMessage('CALL_CONNECTED');
                     if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)
                     { 
                       // only need to keep track of codecs being in call with these
@@ -1574,11 +1585,29 @@ GMM.Event.Receiver.on(event => {
 /////////////////////////////////////////////////////////////////////////////////////////
 
 function sendIntercodecMessage(message) { 
-  if (otherCodec!='') otherCodec.status(message).post().catch(e=>{
-    console.log('Error sending message');
-  });
+  if (otherCodec!='') {
+    if (USE_GMM_QUEUE)  {     
+      otherCodec.status(message).queue().catch(e=>{
+      console.log('Error sending message');
+      }); 
+    }
+    else {
+      otherCodec.status(message).post().catch(e=>{
+        console.log('Error sending message');
+        });
+    }
+
+}
 }
 
+GMM.Event.Queue.on(report => {
+  //The queue will continuously log a report to the console, even when it's empty.
+  //To avoid additional messages, we can filter the Queues Remaining Requests and avoid it if it's equal to Empty
+  if (report.QueueStatus.RemainingRequests != 'Empty') {
+    report.Response.Headers = [] // Clearing Header response for the simplicity of the demo, you may need this info
+    //console.log(report)
+  }
+});
 
 /////////////////////////////////////////////////////////////////////////////////////////
 // OTHER FUNCTIONAL HANDLERS
@@ -1885,7 +1914,7 @@ async function init_switching() {
       startInitialCallTimer();
       
       // always tell the other codec when your are in or out of a call
-      otherCodec.status('CALL_CONNECTED').post();
+      sendIntercodecMessage('CALL_CONNECTED');
       if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)
       { 
         // only need to keep track of codecs being in call with these
@@ -1906,7 +1935,7 @@ async function init_switching() {
       }
 
       // always tell the other codec when your are in or out of a call
-      otherCodec.status('CALL_DISCONNECTED').post();
+      sendIntercodecMessage('CALL_DISCONNECTED');
       if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)
       { 
         // only need to keep track of codecs being in call with these
@@ -1927,7 +1956,7 @@ async function init_switching() {
         startInitialCallTimer();
           
         // always tell the other codec when your are in or out of a call
-        otherCodec.status('CALL_CONNECTED').post();
+        sendIntercodecMessage('CALL_CONNECTED');
         if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)
         { 
           // only need to keep track of codecs being in call with these
@@ -1944,7 +1973,7 @@ async function init_switching() {
             stopAutomation();
           }
         // always tell the other codec when your are in or out of a call
-        otherCodec.status('CALL_DISCONNECTED').post();
+        sendIntercodecMessage('CALL_DISCONNECTED');
         if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)
         { 
           // only need to keep track of codecs being in call with these
@@ -2493,7 +2522,7 @@ async function secondaryStandaloneMode()
   */
 
  // decrease main volume by 5Db since it was increased by the same when combining rooms
- xapi.Command.Audio.Volume.Decrease({ Steps:  SECONDARY_COMBINED_VOLUME_CHANGE_STEPS});
+ if (SECONDARY_COMBINED_VOLUME_CHANGE_STEPS > 0) xapi.Command.Audio.Volume.Decrease({ Steps:  SECONDARY_COMBINED_VOLUME_CHANGE_STEPS});
 
   // restore secondary settings we stored away before combining
  JoinSplit_secondary_settings=await GMM.read.global('JoinSplit_secondary_settings').catch(async e=>{
@@ -2557,7 +2586,7 @@ async function secondaryCombinedMode()
   xapi.Command.Video.Selfview.Set({ Mode: 'Off' });
 
   // increase main volume by 5db, will decrease upon splitting again
-  xapi.Command.Audio.Volume.Increase({ Steps: SECONDARY_COMBINED_VOLUME_CHANGE_STEPS});
+  if (SECONDARY_COMBINED_VOLUME_CHANGE_STEPS > 0) xapi.Command.Audio.Volume.Increase({ Steps: SECONDARY_COMBINED_VOLUME_CHANGE_STEPS});
 
   
   //grab current secondary settings before overwriting for combining  
