@@ -16,7 +16,7 @@ Macros to automate dividing and combining conference rooms with Webex Codec Pro 
 ## Requirements
 
 - Minimum RoomOS version 10.17.1
-- If running RoomOS 11 , minimum version is 11.0.0.4 (RoomOS 11 Beta versions might still have issues with Matrix Assign commands)
+- If running RoomOS 11 , minimum version is 11.2.1.0
 - Codec Pro with QuadCam or SpeakerTrack 60 camera array on each room (SP60 support is experimental)
 
 ## Installation/Configuration

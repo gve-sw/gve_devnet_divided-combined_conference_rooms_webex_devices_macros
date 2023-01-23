@@ -27,7 +27,7 @@ and future Ducker and USBMode modules via events on the same codec and across co
 */
 
 const minOS10Version='10.17.1.0';
-const minOS11Version='11.0.0.4';
+const minOS11Version='11.2.1.0';
 
 /*
 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -2576,8 +2576,9 @@ async function secondaryCombinedMode()
 {
   //setCombinedMode(true);
   roomCombined=true;
-  xapi.config.set('UserInterface OSD Mode', 'Unobstructed')
-    .catch((error) => { console.error("91"+error); });
+  if (!isOSEleven)
+    xapi.config.set('UserInterface OSD Mode', 'Unobstructed')
+      .catch((error) => { console.error("91"+error); });
   xapi.config.set('Audio Output Line 5 Mode', 'On')
     .catch((error) => { console.error(error); });
 
