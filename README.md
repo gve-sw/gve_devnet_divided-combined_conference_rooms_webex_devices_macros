@@ -2,6 +2,12 @@
 
 Macros to automate dividing and combining conference rooms with Webex Codec Pro devices so that the same equipment can be used in both modes to join conference calls
 
+3/3/23 Updates:
+
+- Updated support for USB Mode v3 macro to support version v3-0-7 Beta
+- Added support for RoomOS 11 HDMI Passthrough (call from Laptop) feature
+- Added ability to set SpeakerTrack default behavior in RoomOS 11 with ST_DEFAULT_BEHAVIOR constant
+
 ## Contacts
 
 - Gerardo Chaves (gchaves@cisco.com)

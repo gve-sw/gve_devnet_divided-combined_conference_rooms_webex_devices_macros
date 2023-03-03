@@ -175,6 +175,14 @@ const SP60_CAM_LEFT_ID=0; // set to 0 if using QuadCam
 const SP60_CAM_RIGHT_ID=0; // set to 0 if using QuadCam
 const OVERVIEW_SINGLE_SOURCE_ID = 1;
 
+// In RoomOS 11 there are multiple SpeakerTrack default behaviors to choose from on the navigator or
+// Touch10 device. Set ST_DEFAULT_BEHAVIOR to the one you want this macro to use from these choices:
+// Auto: The same as BestOverview.
+// BestOverview: The default framing mode is Best overview. 
+// Closeup: The default framing mode is Closeup (speaker tracking). 
+// Current: The framing mode is kept unchanged when leaving a call. 
+// Frames: The default framing mode is Frames.
+const ST_DEFAULT_BEHAVIOR='Closeup'
 
 
 /*
@@ -979,6 +987,10 @@ async function startAutomation() {
        } catch (e) {
          console.log('Unable to read WebView Type.. assuming not in webrtc mode')
        }
+  
+       if (isOSEleven) {
+          xapi.Config.Cameras.SpeakerTrack.DefaultBehavior.set(ST_DEFAULT_BEHAVIOR);
+       }
 
     // Always turn on SpeakerTrack when the Automation is started. It is also turned on when a call connects so that
     // if it is manually turned off while outside of a call it goes back to the correct state
@@ -1444,12 +1456,12 @@ GMM.Event.Receiver.on(event => {
                     console.warn(`USB mode initialized...`)
                     updateUSBModeConfig();
                     break;
-                  case 'EnteringWebexMode':
+                  case 'EnteringWebexMode': case 'Entering_Default_Mode': case 'EnteringDefaultMode':
                     console.warn(`You are entering Webex Mode`)
                     //Run code here when Default Mode starts to configure
                     break;
-                  case 'WebexModeStarted':
-                    console.warn(`System is in Default Mode`)
+                  case 'WebexModeStarted': case 'DefaultModeStarted':
+                      console.warn(`System is in Default Mode`)
                     stopAutomation();
                     usb_mode= false;
                     // always tell the other codec when your are in or out of a call
@@ -2076,6 +2088,40 @@ async function init()
   isOSTen=await check4_Minimum_Version_Required(minOS10Version);
   isOSEleven=await check4_Minimum_Version_Required(minOS11Version);
   
+
+    // register HDMI Passhtorugh mode handlers if RoomOS 11
+    if (isOSEleven) {
+        xapi.Status.Video.Output.HDMI.Passthrough.Status.on(value => {
+          console.log(value)
+          if (value=='Active') {
+            console.warn(`System is in Passthrough Active Mode`)
+            startAutomation();
+            usb_mode= true;
+           // always tell the other codec when your are in or out of a call
+            sendIntercodecMessage('CALL_CONNECTED');
+            if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)
+            { 
+              // only need to keep track of codecs being in call with these
+              // booleans in primary codec which is the one that initiates join/split
+              primaryInCall=true;
+              evalCustomPanels(); 
+            }
+          } else {
+            console.warn(`System is in Passthrough Inactive Mode`)
+            stopAutomation();
+            usb_mode= false;
+            // always tell the other codec when your are in or out of a call
+            sendIntercodecMessage('CALL_DISCONNECTED');
+            if (JOIN_SPLIT_CONFIG.ROOM_ROLE==JS_PRIMARY)
+            { 
+              // only need to keep track of codecs being in call with these
+              // booleans in primary codec which is the one that initiates join/split
+              primaryInCall=false;
+              evalCustomPanels(); 
+            }
+          }
+        });
+    }
 
   if (JOIN_SPLIT_CONFIG.ROOM_ROLE===JS_PRIMARY) {
 
