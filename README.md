@@ -2,6 +2,10 @@
 
 Macros to automate dividing and combining conference rooms with Webex Codec Pro devices so that the same equipment can be used in both modes to join conference calls
 
+NOTE: A newer variant of this macro which supports multiple secondary rooms for supporting N-Way divisible rooms and makes the use of GPIO Pins for communicating between codecs optional is posted at:  
+https://github.com/gve-sw/gve_devnet_n_way_divisible_conference_rooms_webex_devices_macros  
+Moving forward, all new enhancements for these divisible room macro samples will be implemented in that repository.
+
 3/3/23 Updates:
 
 - Updated support for USB Mode v3 macro to support version v3-0-7 Beta
